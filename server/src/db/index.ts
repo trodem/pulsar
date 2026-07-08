@@ -1,0 +1,77 @@
+import Database from "better-sqlite3";
+import { drizzle } from "drizzle-orm/better-sqlite3";
+import { existsSync, mkdirSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import * as schema from "./schema.js";
+
+const dbPath = resolve(process.env.DB_PATH || "./data/uptime.db");
+
+// Ensure the parent directory exists before opening the file.
+const dir = dirname(dbPath);
+if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+
+const sqlite = new Database(dbPath);
+sqlite.pragma("journal_mode = WAL");
+sqlite.pragma("foreign_keys = ON");
+
+export const db = drizzle(sqlite, { schema });
+
+/**
+ * Creates all tables if they don't exist yet. Kept idempotent so the app can
+ * boot with a fresh SQLite file without a separate migration step.
+ */
+export function initSchema(): void {
+  sqlite.exec(`
+    CREATE TABLE IF NOT EXISTS users (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      username TEXT NOT NULL UNIQUE,
+      password_hash TEXT NOT NULL,
+      created_at INTEGER NOT NULL DEFAULT (unixepoch())
+    );
+
+    CREATE TABLE IF NOT EXISTS monitors (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      type TEXT NOT NULL DEFAULT 'http',
+      target TEXT NOT NULL,
+      port INTEGER,
+      interval INTEGER NOT NULL DEFAULT 60,
+      timeout INTEGER NOT NULL DEFAULT 10,
+      retries INTEGER NOT NULL DEFAULT 0,
+      accepted_status TEXT NOT NULL DEFAULT '200-299',
+      method TEXT NOT NULL DEFAULT 'GET',
+      active INTEGER NOT NULL DEFAULT 1,
+      created_at INTEGER NOT NULL DEFAULT (unixepoch())
+    );
+
+    CREATE TABLE IF NOT EXISTS heartbeats (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      monitor_id INTEGER NOT NULL REFERENCES monitors(id) ON DELETE CASCADE,
+      status INTEGER NOT NULL,
+      message TEXT NOT NULL DEFAULT '',
+      ping REAL,
+      important INTEGER NOT NULL DEFAULT 0,
+      time INTEGER NOT NULL DEFAULT (unixepoch())
+    );
+    CREATE INDEX IF NOT EXISTS idx_heartbeats_monitor_time
+      ON heartbeats (monitor_id, time);
+
+    CREATE TABLE IF NOT EXISTS notifications (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      type TEXT NOT NULL,
+      config TEXT NOT NULL DEFAULT '{}',
+      active INTEGER NOT NULL DEFAULT 1,
+      created_at INTEGER NOT NULL DEFAULT (unixepoch())
+    );
+
+    CREATE TABLE IF NOT EXISTS monitor_notifications (
+      monitor_id INTEGER NOT NULL REFERENCES monitors(id) ON DELETE CASCADE,
+      notification_id INTEGER NOT NULL REFERENCES notifications(id) ON DELETE CASCADE
+    );
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_monitor_notifications
+      ON monitor_notifications (monitor_id, notification_id);
+  `);
+}
+
+export { sqlite };

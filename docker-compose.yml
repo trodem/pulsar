@@ -1,0 +1,18 @@
+services:
+  uptime-clone:
+    build: .
+    container_name: uptime-clone
+    restart: unless-stopped
+    ports:
+      - "3021:3021"
+    environment:
+      # CHANGE THIS to a long random string in production.
+      JWT_SECRET: "change-me-to-a-long-random-string"
+      # Single-origin deploy: reflect any origin. Set to your public URL to lock down.
+      CLIENT_ORIGIN: "*"
+    volumes:
+      # Persist the SQLite database across container restarts.
+      - uptime-data:/app/server/data
+
+volumes:
+  uptime-data:
