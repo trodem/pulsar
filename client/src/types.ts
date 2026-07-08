@@ -19,7 +19,7 @@ export interface MonitorStats {
 export interface Monitor {
   id: number;
   name: string;
-  type: "http" | "tcp" | "ping";
+  type: "http" | "tcp" | "ping" | "http-ping";
   target: string;
   port: number | null;
   interval: number;
@@ -32,6 +32,10 @@ export interface Monitor {
   stats?: MonitorStats;
   heartbeats?: Heartbeat[];
   notificationIds?: number[];
+  // Logged-in users extracted from the STAP log (http-ping monitors only).
+  users?: string[];
+  // Error while reading that log (null when healthy, undefined when N/A).
+  usersError?: string | null;
 }
 
 export interface Notification {

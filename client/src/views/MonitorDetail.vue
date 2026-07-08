@@ -66,7 +66,7 @@ const events = computed(() =>
     <div class="stat-cards">
       <div class="stat-card">
         <div class="label">Current status</div>
-        <div class="big" :style="{ color: monitor.stats?.status === 1 ? 'var(--up)' : monitor.stats?.status === 0 ? 'var(--down)' : 'var(--pending)' }">
+        <div class="big" :style="{ color: monitor.stats?.status === 1 ? 'var(--up)' : monitor.stats?.status === 2 ? 'var(--degraded)' : monitor.stats?.status === 0 ? 'var(--down)' : 'var(--pending)' }">
           {{ statusLabel(monitor.stats?.status).text }}
         </div>
       </div>

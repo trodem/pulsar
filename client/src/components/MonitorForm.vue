@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, reactive, ref } from "vue";
+import { computed, onMounted, reactive, ref } from "vue";
 import type { Monitor } from "../types";
 import { useNotificationStore } from "../stores/notifications";
 
@@ -23,6 +23,11 @@ const form = reactive<Partial<Monitor>>({
   active: props.monitor?.active ?? true,
   notificationIds: props.monitor?.notificationIds ?? [],
 });
+
+// http-ping shares the URL/method/status inputs with plain http.
+const isHttp = computed(
+  () => form.type === "http" || form.type === "http-ping",
+);
 
 onMounted(() => notificationStore.fetchAll());
 
@@ -77,6 +82,7 @@ async function save() {
           <label>Type</label>
           <select v-model="form.type">
             <option value="http">HTTP(s)</option>
+            <option value="http-ping">HTTP(s) + Ping</option>
             <option value="tcp">TCP Port</option>
             <option value="ping">Ping</option>
           </select>
@@ -88,14 +94,14 @@ async function save() {
       </div>
 
       <div class="field">
-        <label>{{ form.type === "http" ? "URL" : "Hostname / IP" }}</label>
+        <label>{{ isHttp ? "URL" : "Hostname / IP" }}</label>
         <input
           v-model="form.target"
-          :placeholder="form.type === 'http' ? 'https://example.com' : 'example.com'"
+          :placeholder="isHttp ? 'https://example.com' : 'example.com'"
         />
       </div>
 
-      <div class="field-row" v-if="form.type === 'http'">
+      <div class="field-row" v-if="isHttp">
         <div class="field">
           <label>Method</label>
           <select v-model="form.method">

@@ -15,10 +15,16 @@ const cells = computed(() => {
   ] as (Heartbeat | null)[];
 });
 
+function statusText(status: number): string {
+  if (status === 1) return "Up";
+  if (status === 2) return "Degraded";
+  return "Down";
+}
+
 function title(b: Heartbeat | null): string {
   if (!b) return "No data";
   const when = new Date(b.time * 1000).toLocaleString();
-  return `${b.status === 1 ? "Up" : "Down"} · ${b.message} · ${when}`;
+  return `${statusText(b.status)} · ${b.message} · ${when}`;
 }
 </script>
 
@@ -28,7 +34,7 @@ function title(b: Heartbeat | null): string {
       v-for="(b, i) in cells"
       :key="i"
       class="hb"
-      :class="{ up: b?.status === 1, down: b?.status === 0 }"
+      :class="{ up: b?.status === 1, degraded: b?.status === 2, down: b?.status === 0 }"
       :style="{ height: b ? '100%' : '55%' }"
       :title="title(b)"
     ></div>

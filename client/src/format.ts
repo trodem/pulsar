@@ -22,6 +22,7 @@ export function statusLabel(status: number | null | undefined): {
   cls: string;
 } {
   if (status === 1) return { text: "Up", cls: "status-up" };
+  if (status === 2) return { text: "Degraded", cls: "status-degraded" };
   if (status === 0) return { text: "Down", cls: "status-down" };
   return { text: "Pending", cls: "status-pending" };
 }

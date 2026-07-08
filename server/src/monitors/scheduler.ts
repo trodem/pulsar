@@ -8,7 +8,7 @@ import { runCheck } from "./checkers.js";
 interface Task {
   timer: NodeJS.Timeout | null;
   running: boolean;
-  lastStatus: number | null; // 1 up, 0 down, null unknown
+  lastStatus: number | null; // 1 up, 2 degraded, 0 down, null unknown
 }
 
 const tasks = new Map<number, Task>();
@@ -38,7 +38,8 @@ async function executeCheck(monitor: Monitor): Promise<void> {
     }
 
     const prev = task.lastStatus;
-    const status = result.up ? 1 : 0;
+    // 1 = up (green), 2 = degraded (orange), 0 = down (red).
+    const status = result.up ? 1 : result.degraded ? 2 : 0;
     const important = prev !== null && prev !== status;
     const time = Math.floor(Date.now() / 1000);
 

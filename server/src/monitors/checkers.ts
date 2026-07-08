@@ -6,6 +6,10 @@ export interface CheckResult {
   up: boolean;
   ping: number | null; // milliseconds
   message: string;
+  // Partial failure: the service is reachable but not fully healthy
+  // (e.g. http-ping where ICMP answers but the HTTP check fails).
+  // Rendered as a distinct "degraded" (orange) state.
+  degraded?: boolean;
 }
 
 /**
@@ -88,28 +92,72 @@ function checkTcp(monitor: Monitor): Promise<CheckResult> {
   });
 }
 
-async function checkPing(monitor: Monitor): Promise<CheckResult> {
+interface PingResult {
+  alive: boolean;
+  time: number | null;
+  message: string;
+}
+
+/** Runs an ICMP ping against a host and normalizes the result. */
+async function probePing(host: string, timeout: number): Promise<PingResult> {
   try {
-    const res = await ping.promise.probe(monitor.target, {
-      timeout: monitor.timeout,
-      min_reply: 1,
-    });
+    const res = await ping.promise.probe(host, { timeout, min_reply: 1 });
     if (res.alive) {
       const time = res.time === "unknown" ? null : Number(res.time);
       return {
-        up: true,
-        ping: time,
+        alive: true,
+        time,
         message: `Host is alive${time != null ? ` (${time} ms)` : ""}`,
       };
     }
-    return { up: false, ping: null, message: "Host unreachable" };
+    return { alive: false, time: null, message: "Host unreachable" };
   } catch (err) {
     return {
-      up: false,
-      ping: null,
+      alive: false,
+      time: null,
       message: err instanceof Error ? err.message : "Ping failed",
     };
   }
+}
+
+async function checkPing(monitor: Monitor): Promise<CheckResult> {
+  const res = await probePing(monitor.target, monitor.timeout);
+  return { up: res.alive, ping: res.time, message: res.message };
+}
+
+/**
+ * Combined check: the host must answer ICMP ping AND the HTTP request must
+ * return an accepted status. Both run in parallel; the monitor is up only if
+ * both pass. Reports the HTTP response time as ping and includes the ICMP
+ * round-trip in the message.
+ */
+async function checkHttpPing(monitor: Monitor): Promise<CheckResult> {
+  let host: string;
+  try {
+    host = new URL(monitor.target).hostname;
+  } catch {
+    return { up: false, ping: null, message: `Invalid URL: ${monitor.target}` };
+  }
+
+  const [http, pingRes] = await Promise.all([
+    checkHttp(monitor),
+    probePing(host, monitor.timeout),
+  ]);
+
+  const pingPart = pingRes.alive
+    ? `ping ${pingRes.time != null ? `${pingRes.time} ms` : "ok"}`
+    : "ping failed";
+  const message = `HTTP: ${http.message} · ${pingPart}`;
+
+  // Ping down always wins as a hard failure (red). If the host answers ICMP
+  // but the HTTP check fails, the service is degraded (orange), not fully down.
+  if (!pingRes.alive) {
+    return { up: false, degraded: false, ping: http.ping, message };
+  }
+  if (!http.up) {
+    return { up: false, degraded: true, ping: http.ping, message };
+  }
+  return { up: true, ping: http.ping, message };
 }
 
 export async function runCheck(monitor: Monitor): Promise<CheckResult> {
@@ -120,6 +168,8 @@ export async function runCheck(monitor: Monitor): Promise<CheckResult> {
       return checkTcp(monitor);
     case "ping":
       return checkPing(monitor);
+    case "http-ping":
+      return checkHttpPing(monitor);
     default:
       return { up: false, ping: null, message: `Unknown type: ${monitor.type}` };
   }

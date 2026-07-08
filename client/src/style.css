@@ -7,6 +7,7 @@
   --text-dim: #8b95a5;
   --up: #22c55e;
   --down: #ef4444;
+  --degraded: #f97316;
   --pending: #f59e0b;
   --accent: #5b8def;
   --radius: 10px;
@@ -199,6 +200,11 @@ select {
   color: var(--down);
 }
 
+.status-degraded {
+  background: rgba(249, 115, 22, 0.15);
+  color: var(--degraded);
+}
+
 .status-pending {
   background: rgba(245, 158, 11, 0.15);
   color: var(--pending);
@@ -246,6 +252,40 @@ select {
   gap: 8px;
 }
 
+.monitor-users {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.monitor-users .label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: var(--text-dim);
+}
+
+.user-chip {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+}
+
+.monitor-users-error {
+  margin-top: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--down);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
 /* Heartbeat bar */
 .heartbeat-bar {
   display: flex;
@@ -267,6 +307,10 @@ select {
 
 .hb.down {
   background: var(--down);
+}
+
+.hb.degraded {
+  background: var(--degraded);
 }
 
 /* Forms / modal */

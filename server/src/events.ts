@@ -6,6 +6,13 @@ import type { Heartbeat } from "./db/schema.js";
 export interface AppEvents {
   heartbeat: (payload: { monitorId: number; heartbeat: Heartbeat }) => void;
   "monitor:changed": (payload: { monitorId: number }) => void;
+  // Users currently seen in the STAP log for the given monitor, plus any error
+  // encountered while reading that log (null when the read succeeded).
+  "monitor:users": (payload: {
+    monitorId: number;
+    users: string[];
+    error: string | null;
+  }) => void;
 }
 
 class TypedEmitter extends EventEmitter {

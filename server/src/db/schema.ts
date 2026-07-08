@@ -13,9 +13,9 @@ export const users = sqliteTable("users", {
 export const monitors = sqliteTable("monitors", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   name: text("name").notNull(),
-  // "http" | "tcp" | "ping"
+  // "http" | "tcp" | "ping" | "http-ping"
   type: text("type").notNull().default("http"),
-  // For http: full URL. For tcp/ping: hostname or IP.
+  // For http / http-ping: full URL. For tcp/ping: hostname or IP.
   target: text("target").notNull(),
   // For tcp: port number.
   port: integer("port"),

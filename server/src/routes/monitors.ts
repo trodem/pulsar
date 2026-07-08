@@ -5,12 +5,31 @@ import { db } from "../db/index.js";
 import { monitorNotifications, monitors } from "../db/schema.js";
 import { monitorStats, recentHeartbeats } from "../monitors/stats.js";
 import { reschedule, unschedule } from "../monitors/scheduler.js";
+import {
+  getStapError,
+  getStapUsers,
+  isStapMonitor,
+} from "../monitors/stap-users.js";
 
 const router = Router();
 
+// Logged users for a STAP monitor (http-ping type), else undefined so the
+// field is omitted from other monitors.
+function stapUsersFor(m: { id: number; type: string }): string[] | undefined {
+  return isStapMonitor(m) ? getStapUsers(m.id) : undefined;
+}
+
+// Current log-read error for a STAP monitor (null when healthy), else undefined.
+function stapErrorFor(m: {
+  id: number;
+  type: string;
+}): string | null | undefined {
+  return isStapMonitor(m) ? getStapError(m.id) : undefined;
+}
+
 const monitorSchema = z.object({
   name: z.string().min(1).max(100),
-  type: z.enum(["http", "tcp", "ping"]),
+  type: z.enum(["http", "tcp", "ping", "http-ping"]),
   target: z.string().min(1).max(500),
   port: z.number().int().min(1).max(65535).nullable().optional(),
   interval: z.number().int().min(5).max(86400).default(60),
@@ -49,6 +68,8 @@ router.get("/", (_req, res) => {
     ...m,
     stats: monitorStats(m.id),
     heartbeats: recentHeartbeats(m.id, 40),
+    users: stapUsersFor(m),
+    usersError: stapErrorFor(m),
   }));
   res.json(data);
 });
@@ -65,6 +86,8 @@ router.get("/:id", (req, res) => {
     stats: monitorStats(id),
     heartbeats: recentHeartbeats(id, 100),
     notificationIds: linkedNotificationIds(id),
+    users: stapUsersFor(monitor),
+    usersError: stapErrorFor(monitor),
   });
 });
 

@@ -72,6 +72,16 @@ export const useMonitorStore = defineStore("monitors", () => {
     socket.on("heartbeat", (p: { monitorId: number; heartbeat: Heartbeat }) => {
       applyHeartbeat(p.monitorId, p.heartbeat);
     });
+    socket.on(
+      "monitor:users",
+      (p: { monitorId: number; users: string[]; error: string | null }) => {
+        const m = monitors.value.find((x) => x.id === p.monitorId);
+        if (m) {
+          m.users = p.users;
+          m.usersError = p.error;
+        }
+      },
+    );
     socketBound = true;
   }
 

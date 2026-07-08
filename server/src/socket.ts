@@ -30,5 +30,10 @@ export function initSocket(httpServer: HttpServer): IOServer {
     io.emit("heartbeat", payload);
   });
 
+  // Forward STAP logged-user updates.
+  bus.onEvent("monitor:users", (payload) => {
+    io.emit("monitor:users", payload);
+  });
+
   return io;
 }
