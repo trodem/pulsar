@@ -2,7 +2,7 @@ import { defineStore } from "pinia";
 import { ref } from "vue";
 import { api } from "../api";
 import { getSocket } from "../socket";
-import type { Heartbeat, Monitor } from "../types";
+import type { Heartbeat, LogFileEntry, Monitor } from "../types";
 
 export const useMonitorStore = defineStore("monitors", () => {
   const monitors = ref<Monitor[]>([]);
@@ -42,6 +42,16 @@ export const useMonitorStore = defineStore("monitors", () => {
   async function remove(id: number) {
     await api.delete(`/monitors/${id}`);
     monitors.value = monitors.value.filter((m) => m.id !== id);
+  }
+
+  // Lists the files in the monitor's remote log folder (for the modal).
+  async function logFiles(
+    id: number,
+  ): Promise<{ folder: string; files: LogFileEntry[] }> {
+    const { data } = await api.get<{ folder: string; files: LogFileEntry[] }>(
+      `/monitors/${id}/log-files`,
+    );
+    return data;
   }
 
   // Apply a live heartbeat pushed over the websocket to local state.
@@ -94,6 +104,7 @@ export const useMonitorStore = defineStore("monitors", () => {
     update,
     toggle,
     remove,
+    logFiles,
     bindSocket,
   };
 });

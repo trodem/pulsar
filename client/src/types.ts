@@ -38,6 +38,12 @@ export interface Monitor {
   usersError?: string | null;
 }
 
+export interface LogFileEntry {
+  name: string;
+  size: number; // bytes
+  modified: number; // unix seconds
+}
+
 export interface Notification {
   id: number;
   name: string;

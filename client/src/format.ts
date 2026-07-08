@@ -8,6 +8,13 @@ export function ms(v: number | null | undefined): string {
   return `${Math.round(v)} ms`;
 }
 
+export function fileSize(bytes: number | null | undefined): string {
+  if (bytes == null) return "—";
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
 export function relTime(unix: number | null | undefined): string {
   if (!unix) return "never";
   const diff = Date.now() / 1000 - unix;

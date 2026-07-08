@@ -286,6 +286,37 @@ select {
   gap: 6px;
 }
 
+.log-files-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.log-files-table th,
+.log-files-table td {
+  text-align: left;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border);
+}
+
+.log-files-table th {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: var(--text-dim);
+}
+
+.log-files-table td:first-child {
+  font-family: monospace;
+  word-break: break-all;
+}
+
+.log-files-table td:nth-child(2),
+.log-files-table th:nth-child(2) {
+  white-space: nowrap;
+  color: var(--text-dim);
+}
+
 /* Heartbeat bar */
 .heartbeat-bar {
   display: flex;

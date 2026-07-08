@@ -31,6 +31,11 @@ export const config = {
 
   // STAP logged-user extraction (only for http-ping monitors).
   stapLogUncTemplate: process.env.STAP_LOG_UNC || DEFAULT_STAP_LOG_UNC,
+  // Optional Windows credentials to authenticate the SMB session to each host
+  // (avoids needing the server's own account to have access). Both must be set.
+  // User may be "DOMAIN\\user", "user@domain" or a plain username.
+  stapLogUser: process.env.STAP_LOG_USER || "",
+  stapLogPassword: process.env.STAP_LOG_PASSWORD || "",
   // How often to re-read the remote log (seconds).
   stapPollSeconds: Number(process.env.STAP_POLL_SECONDS || 15),
   // Only read the last N bytes of the log, to bound work and bias to recent

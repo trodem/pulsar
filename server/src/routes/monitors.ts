@@ -9,6 +9,8 @@ import {
   getStapError,
   getStapUsers,
   isStapMonitor,
+  listLogFolder,
+  logFolderForTarget,
 } from "../monitors/stap-users.js";
 
 const router = Router();
@@ -148,6 +150,28 @@ router.patch("/:id/toggle", (req, res) => {
     .all();
   reschedule(id);
   res.json(updated);
+});
+
+// Lists the files inside the monitor's remote log folder (for the modal).
+router.get("/:id/log-files", async (req, res) => {
+  const id = Number(req.params.id);
+  const monitor = db.select().from(monitors).where(eq(monitors.id, id)).get();
+  if (!monitor) {
+    res.status(404).json({ error: "Monitor not found" });
+    return;
+  }
+  if (!isStapMonitor(monitor)) {
+    res.status(400).json({ error: "Only http-ping monitors have a log folder" });
+    return;
+  }
+  try {
+    const files = await listLogFolder(monitor.target);
+    res.json({ folder: logFolderForTarget(monitor.target), files });
+  } catch (err) {
+    res
+      .status(502)
+      .json({ error: err instanceof Error ? err.message : "Cannot read folder" });
+  }
 });
 
 router.delete("/:id", (req, res) => {

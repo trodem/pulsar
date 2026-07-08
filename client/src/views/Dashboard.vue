@@ -2,16 +2,25 @@
 import { computed, onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
 import { useMonitorStore } from "../stores/monitors";
-import type { Monitor } from "../types";
+import type { LogFileEntry, Monitor } from "../types";
 import HeartbeatBar from "../components/HeartbeatBar.vue";
 import MonitorForm from "../components/MonitorForm.vue";
-import { ms, relTime, statusLabel, uptimePct } from "../format";
+import { fileSize, ms, relTime, statusLabel, uptimePct } from "../format";
 
 const store = useMonitorStore();
 const router = useRouter();
 
 const showForm = ref(false);
 const editing = ref<Monitor | null>(null);
+
+interface LogModal {
+  name: string;
+  folder: string;
+  files: LogFileEntry[];
+  loading: boolean;
+  error: string;
+}
+const logModal = ref<LogModal | null>(null);
 
 onMounted(async () => {
   await store.fetchAll();
@@ -65,6 +74,32 @@ async function onSaved(payload: Partial<Monitor>) {
 
 async function remove(m: Monitor) {
   if (confirm(`Delete monitor "${m.name}"?`)) await store.remove(m.id);
+}
+
+function openWebPage(m: Monitor) {
+  window.open(m.target, "_blank", "noopener");
+}
+
+async function showLogFiles(m: Monitor) {
+  logModal.value = {
+    name: m.name,
+    folder: "",
+    files: [],
+    loading: true,
+    error: "",
+  };
+  try {
+    const { folder, files } = await store.logFiles(m.id);
+    logModal.value = { name: m.name, folder, files, loading: false, error: "" };
+  } catch (e: any) {
+    logModal.value = {
+      name: m.name,
+      folder: "",
+      files: [],
+      loading: false,
+      error: e?.response?.data?.error ?? "Could not read the log folder.",
+    };
+  }
 }
 </script>
 
@@ -158,6 +193,22 @@ async function remove(m: Monitor) {
           </div>
         </div>
         <div class="monitor-actions">
+          <button
+            v-if="m.type === 'http' || m.type === 'http-ping'"
+            class="btn btn-sm"
+            title="Open the monitored URL in a new tab"
+            @click="openWebPage(m)"
+          >
+            🌐 Open
+          </button>
+          <button
+            v-if="m.type === 'http-ping'"
+            class="btn btn-sm"
+            title="Show the files in the remote log folder"
+            @click="showLogFiles(m)"
+          >
+            📁 Log files
+          </button>
           <button class="btn btn-sm" @click="store.toggle(m.id)">
             {{ m.active ? "Pause" : "Resume" }}
           </button>
@@ -174,4 +225,43 @@ async function remove(m: Monitor) {
     @close="showForm = false"
     @saved="onSaved"
   />
+
+  <div v-if="logModal" class="modal-backdrop" @click.self="logModal = null">
+    <div class="modal">
+      <h2>Log files — {{ logModal.name }}</h2>
+      <div
+        v-if="logModal.folder"
+        class="muted"
+        style="margin-bottom: 14px; word-break: break-all; font-size: 12px"
+      >
+        {{ logModal.folder }}
+      </div>
+
+      <div v-if="logModal.loading" class="muted">Loading…</div>
+      <div v-else-if="logModal.error" class="error-msg">{{ logModal.error }}</div>
+      <div v-else-if="logModal.files.length === 0" class="muted">
+        The folder is empty.
+      </div>
+      <table v-else class="log-files-table">
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Size</th>
+            <th>Modified</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="f in logModal.files" :key="f.name">
+            <td>{{ f.name }}</td>
+            <td>{{ fileSize(f.size) }}</td>
+            <td>{{ relTime(f.modified) }}</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="modal-actions">
+        <button class="btn" @click="logModal = null">Close</button>
+      </div>
+    </div>
+  </div>
 </template>
