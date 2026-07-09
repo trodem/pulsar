@@ -1,14 +1,22 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue";
+import { computed, onMounted, ref, watch } from "vue";
 import { useRouter } from "vue-router";
 import { useMonitorStore } from "../stores/monitors";
+import { useUiStore } from "../stores/ui";
 import type { LogFileEntry, Monitor } from "../types";
 import HeartbeatBar from "../components/HeartbeatBar.vue";
 import MonitorForm from "../components/MonitorForm.vue";
 import { fileSize, ms, relTime, statusLabel, uptimePct } from "../format";
 
 const store = useMonitorStore();
+const ui = useUiStore();
 const router = useRouter();
+
+// The global toolbar's "+ New monitor" button opens this page's form.
+watch(
+  () => ui.newMonitorRequests,
+  () => openNew(),
+);
 
 const showForm = ref(false);
 const editing = ref<Monitor | null>(null);
@@ -132,7 +140,6 @@ async function showLogFiles(m: Monitor) {
         <template v-if="summary.degraded">{{ summary.degraded }} degraded · </template>{{ summary.down }} down
       </div>
     </div>
-    <button class="btn btn-primary" @click="openNew">+ New monitor</button>
   </div>
 
   <div v-if="store.monitors.length > 0" class="stat-cards">

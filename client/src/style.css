@@ -44,17 +44,82 @@ select {
 /* Layout */
 .app-shell {
   display: flex;
+  flex-direction: column;
   min-height: 100vh;
+}
+
+.app-header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  height: 56px;
+  padding: 0 18px;
+  background: var(--bg-elev);
+  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+  z-index: 20;
+}
+
+.header-right {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.icon-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border: 1px solid var(--border);
+  background: var(--bg-elev-2);
+  color: var(--text-dim);
+  border-radius: 8px;
+  transition: color 0.15s, background 0.15s;
+}
+
+.icon-btn:hover {
+  color: var(--text);
+  background: var(--bg);
+}
+
+.app-toolbar {
+  position: sticky;
+  top: 56px;
+  z-index: 15;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 18px;
+  background: var(--bg-elev);
+  border-bottom: 1px solid var(--border);
+}
+
+.app-body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
 }
 
 .sidebar {
   width: 230px;
+  flex-shrink: 0;
   background: var(--bg-elev);
   border-right: 1px solid var(--border);
   display: flex;
   flex-direction: column;
-  padding: 20px 14px;
+  padding: 16px 14px;
   gap: 6px;
+  transition: width 0.18s ease;
+  overflow: hidden;
+}
+
+.sidebar.collapsed {
+  width: 66px;
+  padding: 16px 12px;
 }
 
 .brand {
@@ -63,7 +128,7 @@ select {
   gap: 10px;
   font-weight: 700;
   font-size: 18px;
-  padding: 4px 8px 18px;
+  white-space: nowrap;
 }
 
 .brand .dot {
@@ -75,12 +140,40 @@ select {
 }
 
 .nav-link {
+  display: flex;
+  align-items: center;
+  gap: 12px;
   padding: 10px 12px;
   border-radius: 8px;
   color: var(--text-dim);
   font-size: 14px;
   font-weight: 500;
+  white-space: nowrap;
   transition: background 0.15s, color 0.15s;
+}
+
+.nav-icon {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+}
+
+.sidebar-toggle {
+  align-self: flex-end;
+  margin-bottom: 6px;
+}
+
+.sidebar.collapsed .sidebar-toggle {
+  align-self: center;
+}
+
+.sidebar.collapsed .nav-link {
+  justify-content: center;
+  padding: 10px 0;
+}
+
+.sidebar.collapsed .nav-label {
+  display: none;
 }
 
 .nav-link:hover {
@@ -101,9 +194,9 @@ select {
 
 .main {
   flex: 1;
+  min-width: 0;
   padding: 28px 34px;
   overflow-y: auto;
-  max-height: 100vh;
 }
 
 .page-head {
