@@ -24,6 +24,18 @@ export const useMonitorStore = defineStore("monitors", () => {
     return data;
   }
 
+  // Heartbeats for a monitor within the last `hours` hours (detail-view scale).
+  async function heartbeatsSince(
+    id: number,
+    hours: number,
+  ): Promise<Heartbeat[]> {
+    const { data } = await api.get<{ hours: number; heartbeats: Heartbeat[] }>(
+      `/monitors/${id}/heartbeats`,
+      { params: { hours } },
+    );
+    return data.heartbeats;
+  }
+
   async function create(payload: Partial<Monitor>) {
     await api.post("/monitors", payload);
     await fetchAll();
@@ -126,6 +138,7 @@ export const useMonitorStore = defineStore("monitors", () => {
     loading,
     fetchAll,
     get,
+    heartbeatsSince,
     create,
     update,
     toggle,

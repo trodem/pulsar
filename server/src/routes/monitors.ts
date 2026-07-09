@@ -9,7 +9,11 @@ import {
   tags,
   type Tag,
 } from "../db/schema.js";
-import { monitorStats, recentHeartbeats } from "../monitors/stats.js";
+import {
+  heartbeatsSince,
+  monitorStats,
+  recentHeartbeats,
+} from "../monitors/stats.js";
 import { reschedule, unschedule } from "../monitors/scheduler.js";
 import {
   checkMonitorUsers,
@@ -143,6 +147,19 @@ router.get("/:id", (req, res) => {
     users: stapUsersFor(monitor),
     usersError: stapErrorFor(monitor),
   });
+});
+
+// Heartbeats within an adjustable time window (detail view's scale control).
+// `hours` is clamped to 1..24; returns every beat in the window, chronological.
+router.get("/:id/heartbeats", (req, res) => {
+  const id = Number(req.params.id);
+  const hours = Math.min(24, Math.max(1, Number(req.query.hours) || 6));
+  const monitor = db.select().from(monitors).where(eq(monitors.id, id)).get();
+  if (!monitor) {
+    res.status(404).json({ error: "Monitor not found" });
+    return;
+  }
+  res.json({ hours, heartbeats: heartbeatsSince(id, hours) });
 });
 
 router.post("/", (req, res) => {

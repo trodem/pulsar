@@ -14,6 +14,22 @@ export function recentHeartbeats(monitorId: number, limit = 50): Heartbeat[] {
   return rows.reverse();
 }
 
+// All heartbeats from the last `hours` hours, chronological. Used by the detail
+// view's adjustable heartbeat-bar scale (1..24h); unbounded by count so a wide
+// window returns every beat for the client to bin into buckets.
+export function heartbeatsSince(monitorId: number, hours: number): Heartbeat[] {
+  const since = Math.floor(Date.now() / 1000) - hours * 3600;
+  const rows = db
+    .select()
+    .from(heartbeats)
+    .where(
+      and(eq(heartbeats.monitorId, monitorId), gte(heartbeats.time, since)),
+    )
+    .orderBy(desc(heartbeats.time))
+    .all();
+  return rows.reverse();
+}
+
 export interface MonitorStats {
   status: number | null; // latest status
   lastMessage: string;
