@@ -171,7 +171,7 @@ async function save() {
               '--tag-color': t.color,
               background: form.tagIds?.includes(t.id) ? t.color : 'transparent',
               borderColor: t.color,
-              color: form.tagIds?.includes(t.id) ? '#fff' : t.color,
+              color: form.tagIds?.includes(t.id) ? 'var(--on-accent)' : t.color,
             }"
             @click="toggleTag(t.id)"
           >

@@ -483,7 +483,7 @@ const groups = computed(() => groupStore.items);
   height: 8px;
   border-radius: 50%;
   background: var(--maintenance);
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.18);
+  box-shadow: 0 0 0 3px var(--maintenance-soft);
   flex-shrink: 0;
 }
 .mw-dot.off {
@@ -500,7 +500,7 @@ const groups = computed(() => groupStore.items);
   text-transform: uppercase;
   letter-spacing: 0.4px;
   color: var(--maintenance);
-  background: rgba(59, 130, 246, 0.14);
+  background: var(--maintenance-soft);
   padding: 2px 8px;
   border-radius: 20px;
 }
@@ -547,7 +547,7 @@ const groups = computed(() => groupStore.items);
 }
 .mw-chip-group {
   color: var(--accent);
-  border-color: rgba(56, 189, 248, 0.35);
+  border-color: var(--accent-border);
 }
 .mw-empty {
   font-size: 12px;
@@ -582,7 +582,7 @@ const groups = computed(() => groupStore.items);
 }
 .day-chip.selected {
   border-color: var(--maintenance);
-  background: rgba(59, 130, 246, 0.18);
+  background: var(--maintenance-soft);
   color: var(--maintenance);
 }
 .pick-list {

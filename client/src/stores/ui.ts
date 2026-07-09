@@ -20,26 +20,16 @@ export const useUiStore = defineStore("ui", () => {
     activeTagIds.value = new Set();
   }
 
-  // Status codes selected in the Monitors toolbar's status filter. Empty = show
-  // all. A monitor passes when its current status is one of the selected codes
-  // (1 up, 2 degraded, 3 maintenance, 0 down).
-  const activeStatuses = ref<Set<number>>(new Set());
-  function toggleStatusFilter(status: number) {
-    const next = new Set(activeStatuses.value);
-    next.has(status) ? next.delete(status) : next.add(status);
-    activeStatuses.value = next;
-  }
-  function clearStatusFilter() {
-    activeStatuses.value = new Set();
-  }
+  // Status code selected in the Monitors toolbar's status filter. `null` = show
+  // all. A monitor passes when its current status equals the selected code
+  // (1 up, 2 degraded, 3 maintenance, 0 down). Single-select.
+  const activeStatus = ref<number | null>(null);
 
   return {
     monitorSearch,
     activeTagIds,
     toggleTagFilter,
     clearTagFilter,
-    activeStatuses,
-    toggleStatusFilter,
-    clearStatusFilter,
+    activeStatus,
   };
 });

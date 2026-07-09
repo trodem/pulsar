@@ -1,17 +1,82 @@
+/* =========================================================================
+   DESIGN TOKENS — the single source of truth for Pulsar's look.
+   Change a value here and it propagates across the whole app. Components must
+   consume these tokens (var(--…)) and never hardcode raw colors/sizes.
+   See docs/design.md for the rules.
+   ========================================================================= */
 :root {
+  /* ---- Surfaces & structure ---- */
   --bg: #0d1117;
   --bg-elev: #161b22;
   --bg-elev-2: #1c2330;
   --border: #2a2f3a;
+
+  /* ---- Text ---- */
   --text: #e6edf3;
   --text-dim: #8b95a5;
+
+  /* ---- Status colors (map 1:1 to heartbeat status codes) ---- */
   --up: #22c55e;
   --down: #ef4444;
   --degraded: #f97316;
   --pending: #f59e0b;
   --maintenance: #3b82f6;
+
+  /* ---- Brand ---- */
   --accent: #38bdf8;
+  --on-accent: #ffffff; /* text/icon on any filled accent or status surface */
+
+  /* ---- Soft (translucent) tints, derived from the base colors so they always
+       follow a palette change ---- */
+  --up-soft: color-mix(in srgb, var(--up) 16%, transparent);
+  --down-soft: color-mix(in srgb, var(--down) 16%, transparent);
+  --degraded-soft: color-mix(in srgb, var(--degraded) 16%, transparent);
+  --pending-soft: color-mix(in srgb, var(--pending) 16%, transparent);
+  --maintenance-soft: color-mix(in srgb, var(--maintenance) 16%, transparent);
+  --accent-soft: color-mix(in srgb, var(--accent) 16%, transparent);
+  --accent-border: color-mix(in srgb, var(--accent) 40%, transparent);
+  --down-border: color-mix(in srgb, var(--down) 30%, transparent);
+  --scrim: rgba(0, 0, 0, 0.6); /* modal backdrop */
+
+  /* ---- Radius ---- */
+  --radius-xs: 5px;
+  --radius-sm: 8px;
   --radius: 10px;
+  --radius-pill: 999px;
+
+  /* ---- Typography ---- */
+  --font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+  --fs-2xs: 10px;
+  --fs-xs: 11px;
+  --fs-sm: 12px;
+  --fs-md: 13px;
+  --fs-base: 14px;
+  --fs-lg: 16px;
+  --fs-xl: 18px;
+  --fs-2xl: 20px;
+  --fs-3xl: 22px;
+
+  /* ---- Spacing scale (use for new gap/padding/margin) ---- */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-7: 32px;
+
+  /* ---- Elevation / shadow ---- */
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 4px 10px rgba(0, 0, 0, 0.35);
+  --shadow-pop: 0 8px 24px rgba(0, 0, 0, 0.25);
+  --shadow-pop-strong: 0 8px 24px rgba(0, 0, 0, 0.45);
+
+  /* ---- Layout dimensions ---- */
+  --sidebar-w: 230px;
+  --sidebar-w-collapsed: 66px;
+  --header-h: 56px;
+
   color-scheme: dark;
 }
 
@@ -21,7 +86,7 @@
 
 body {
   margin: 0;
-  font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+  font-family: var(--font-family);
   background: var(--bg);
   color: var(--text);
   -webkit-font-smoothing: antialiased;
@@ -53,7 +118,7 @@ select {
   display: flex;
   align-items: center;
   gap: 14px;
-  height: 56px;
+  height: var(--header-h);
   padding: 0 18px;
   background: var(--bg-elev);
   border-bottom: 1px solid var(--border);
@@ -78,7 +143,7 @@ select {
   border: 1px solid var(--border);
   background: var(--bg-elev-2);
   color: var(--text-dim);
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   transition: color 0.15s, background 0.15s;
 }
 
@@ -103,7 +168,7 @@ select {
 }
 
 .sidebar {
-  width: 230px;
+  width: var(--sidebar-w);
   flex-shrink: 0;
   background: var(--bg-elev);
   border-right: 1px solid var(--border);
@@ -116,7 +181,7 @@ select {
 }
 
 .sidebar.collapsed {
-  width: 66px;
+  width: var(--sidebar-w-collapsed);
   padding: 16px 12px;
 }
 
@@ -125,7 +190,7 @@ select {
   align-items: center;
   gap: 10px;
   font-weight: 700;
-  font-size: 18px;
+  font-size: var(--fs-xl);
   white-space: nowrap;
 }
 
@@ -142,9 +207,9 @@ select {
   align-items: center;
   gap: 12px;
   padding: 10px 12px;
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   color: var(--text-dim);
-  font-size: 14px;
+  font-size: var(--fs-base);
   font-weight: 500;
   white-space: nowrap;
   transition: background 0.15s, color 0.15s;
@@ -154,6 +219,9 @@ select {
   width: 20px;
   height: 20px;
   flex-shrink: 0;
+  /* Tint the icons with the app accent (SVGs use stroke="currentColor"), so the
+     icon stays branded while the label follows the link's neutral text color. */
+  color: var(--accent);
 }
 
 .sidebar-toggle {
@@ -186,7 +254,7 @@ select {
 
 .sidebar-footer {
   margin-top: auto;
-  font-size: 13px;
+  font-size: var(--fs-md);
   color: var(--text-dim);
 }
 
@@ -205,7 +273,7 @@ select {
 }
 
 .page-head h1 {
-  font-size: 22px;
+  font-size: var(--fs-3xl);
   margin: 0;
 }
 
@@ -223,8 +291,8 @@ select {
   background: var(--bg-elev-2);
   color: var(--text);
   padding: 9px 16px;
-  border-radius: 8px;
-  font-size: 14px;
+  border-radius: var(--radius-sm);
+  font-size: var(--fs-base);
   font-weight: 500;
   transition: filter 0.15s, background 0.15s;
 }
@@ -236,7 +304,7 @@ select {
 .btn-primary {
   background: var(--accent);
   border-color: var(--accent);
-  color: #fff;
+  color: var(--on-accent);
 }
 
 .btn-danger {
@@ -247,7 +315,7 @@ select {
 
 .btn-sm {
   padding: 6px 10px;
-  font-size: 13px;
+  font-size: var(--fs-md);
 }
 
 /* Icon-only action button (monitor card header). Square, the emoji centred;
@@ -259,7 +327,7 @@ select {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 15px;
+  font-size: var(--fs-lg);
   line-height: 1;
 }
 
@@ -336,30 +404,30 @@ select {
 
 /* Tag shown in the card header — sized like the monitor type badge. */
 .tag-badge {
-  font-size: 11px;
+  font-size: var(--fs-xs);
   font-weight: 600;
   line-height: 1;
   text-transform: uppercase;
-  color: #fff;
+  color: var(--on-accent);
   border: 1px solid transparent;
   padding: 2px 7px;
-  border-radius: 5px;
+  border-radius: var(--radius-xs);
   white-space: nowrap;
 }
 
 .paused-badge {
-  font-size: 10px;
+  font-size: var(--fs-2xs);
   font-weight: 700;
   letter-spacing: 0.5px;
   text-transform: uppercase;
   color: var(--text-dim);
   border: 1px solid var(--border);
-  border-radius: 5px;
+  border-radius: var(--radius-xs);
   padding: 2px 7px;
 }
 
 .header-check {
-  font-size: 12px;
+  font-size: var(--fs-sm);
   color: var(--text-dim);
   white-space: nowrap;
 }
@@ -385,47 +453,47 @@ select {
 }
 
 .status-pill {
-  font-size: 11px;
+  font-size: var(--fs-xs);
   font-weight: 700;
   letter-spacing: 0.5px;
   padding: 3px 9px;
-  border-radius: 20px;
+  border-radius: var(--radius-pill);
   text-transform: uppercase;
 }
 
 .status-up {
-  background: rgba(34, 197, 94, 0.15);
+  background: var(--up-soft);
   color: var(--up);
 }
 
 .status-down {
-  background: rgba(239, 68, 68, 0.15);
+  background: var(--down-soft);
   color: var(--down);
 }
 
 .status-degraded {
-  background: rgba(249, 115, 22, 0.15);
+  background: var(--degraded-soft);
   color: var(--degraded);
 }
 
 .status-pending {
-  background: rgba(245, 158, 11, 0.15);
+  background: var(--pending-soft);
   color: var(--pending);
 }
 
 .status-maintenance {
-  background: rgba(59, 130, 246, 0.15);
+  background: var(--maintenance-soft);
   color: var(--maintenance);
 }
 
 .monitor-name {
   font-weight: 600;
-  font-size: 16px;
+  font-size: var(--fs-lg);
 }
 
 .monitor-target {
   color: var(--text-dim);
-  font-size: 13px;
+  font-size: var(--fs-md);
 }
 
 /* Target URL shown as a second line in the card header, below the LED/name row
@@ -433,17 +501,17 @@ select {
 .header-target {
   flex-basis: 100%;
   margin-top: 2px;
-  font-size: 12px;
+  font-size: var(--fs-sm);
   word-break: break-all;
 }
 
 .type-tag {
-  font-size: 11px;
+  font-size: var(--fs-xs);
   text-transform: uppercase;
   color: var(--text-dim);
   border: 1px solid var(--border);
   padding: 2px 7px;
-  border-radius: 5px;
+  border-radius: var(--radius-xs);
 }
 
 /* Stats footer: the three stat blocks spread evenly along a divider at the
@@ -458,14 +526,14 @@ select {
 }
 
 .meta-block .label {
-  font-size: 11px;
+  font-size: var(--fs-xs);
   color: var(--text-dim);
   text-transform: uppercase;
   letter-spacing: 0.4px;
 }
 
 .meta-block .value {
-  font-size: 16px;
+  font-size: var(--fs-lg);
   font-weight: 600;
 }
 
@@ -483,25 +551,25 @@ select {
 }
 
 .monitor-users .label {
-  font-size: 11px;
+  font-size: var(--fs-xs);
   text-transform: uppercase;
   letter-spacing: 0.4px;
   color: var(--text-dim);
 }
 
 .user-chip {
-  font-size: 12px;
+  font-size: var(--fs-sm);
   font-weight: 600;
   padding: 2px 8px;
-  border-radius: 999px;
-  background: rgba(56, 189, 248, 0.15);
-  border: 1px solid rgba(56, 189, 248, 0.4);
+  border-radius: var(--radius-pill);
+  background: var(--accent-soft);
+  border: 1px solid var(--accent-border);
   color: var(--accent);
 }
 
 .monitor-users-error {
   margin-top: 8px;
-  font-size: 12px;
+  font-size: var(--fs-sm);
   font-weight: 600;
   color: var(--down);
   display: flex;
@@ -512,7 +580,7 @@ select {
 .log-files-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 13px;
+  font-size: var(--fs-md);
 }
 
 .log-files-table th,
@@ -523,14 +591,14 @@ select {
 }
 
 .log-files-table th {
-  font-size: 11px;
+  font-size: var(--fs-xs);
   text-transform: uppercase;
   letter-spacing: 0.4px;
   color: var(--text-dim);
 }
 
 .log-files-table td:first-child {
-  font-family: monospace;
+  font-family: var(--font-mono);
   word-break: break-all;
 }
 
@@ -566,7 +634,7 @@ select {
 /* Lift and scale the hovered heartbeat for a tactile feel. */
 .hb.active {
   transform: scaleY(1.15) scaleX(1.35);
-  box-shadow: 0 0 0 2px var(--bg), 0 4px 10px rgba(0, 0, 0, 0.35);
+  box-shadow: 0 0 0 2px var(--bg), var(--shadow-md);
 }
 
 .hb.up {
@@ -604,8 +672,8 @@ select {
   padding: 9px 11px;
   background: var(--bg-elev-2);
   border: 1px solid var(--border);
-  border-radius: 8px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-pop-strong);
   pointer-events: none;
   white-space: normal;
 }
@@ -626,20 +694,20 @@ select {
   align-items: center;
   gap: 7px;
   font-weight: 600;
-  font-size: 13px;
+  font-size: var(--fs-md);
   color: var(--text);
 }
 
 .hb-tooltip-msg {
   margin-top: 5px;
-  font-size: 12px;
+  font-size: var(--fs-sm);
   color: var(--text);
   word-break: break-word;
 }
 
 .hb-tooltip-time {
   margin-top: 4px;
-  font-size: 11px;
+  font-size: var(--fs-xs);
   color: var(--text-dim);
 }
 
@@ -699,12 +767,12 @@ select {
 }
 
 .hb-scale-label {
-  font-size: 12px;
+  font-size: var(--fs-sm);
   color: var(--text-dim);
 }
 
 .hb-scale-value {
-  font-size: 13px;
+  font-size: var(--fs-md);
   font-weight: 600;
   color: var(--text);
   min-width: 30px;
@@ -732,7 +800,7 @@ select {
   border-radius: 50%;
   background: var(--text);
   border: 2px solid var(--bg-elev);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+  box-shadow: var(--shadow-sm);
   transition: transform 0.12s ease;
 }
 
@@ -746,7 +814,7 @@ select {
   border-radius: 50%;
   background: var(--text);
   border: 2px solid var(--bg-elev);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+  box-shadow: var(--shadow-sm);
   cursor: pointer;
 }
 
@@ -768,27 +836,27 @@ select {
 
 .led.status-up {
   background: var(--up);
-  box-shadow: 0 0 8px 1px var(--up), 0 0 0 3px rgba(34, 197, 94, 0.18);
+  box-shadow: 0 0 8px 1px var(--up), 0 0 0 3px var(--up-soft);
 }
 
 .led.status-down {
   background: var(--down);
-  box-shadow: 0 0 8px 1px var(--down), 0 0 0 3px rgba(239, 68, 68, 0.18);
+  box-shadow: 0 0 8px 1px var(--down), 0 0 0 3px var(--down-soft);
 }
 
 .led.status-degraded {
   background: var(--degraded);
-  box-shadow: 0 0 8px 1px var(--degraded), 0 0 0 3px rgba(249, 115, 22, 0.18);
+  box-shadow: 0 0 8px 1px var(--degraded), 0 0 0 3px var(--degraded-soft);
 }
 
 .led.status-maintenance {
   background: var(--maintenance);
-  box-shadow: 0 0 8px 1px var(--maintenance), 0 0 0 3px rgba(59, 130, 246, 0.18);
+  box-shadow: 0 0 8px 1px var(--maintenance), 0 0 0 3px var(--maintenance-soft);
 }
 
 .led.status-pending {
   background: var(--pending);
-  box-shadow: 0 0 8px 1px var(--pending), 0 0 0 3px rgba(245, 158, 11, 0.18);
+  box-shadow: 0 0 8px 1px var(--pending), 0 0 0 3px var(--pending-soft);
 }
 
 .led.led-paused {
@@ -800,7 +868,7 @@ select {
 .modal-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.6);
+  background: var(--scrim);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -829,7 +897,7 @@ select {
 
 .field label {
   display: block;
-  font-size: 13px;
+  font-size: var(--fs-md);
   color: var(--text-dim);
   margin-bottom: 6px;
 }
@@ -838,11 +906,27 @@ select {
 .field select {
   width: 100%;
   padding: 10px 12px;
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   border: 1px solid var(--border);
   background: var(--bg);
   color: var(--text);
-  font-size: 14px;
+  font-size: var(--fs-base);
+}
+
+/* Single-select status filter in the Monitors toolbar. */
+.status-select {
+  padding: 7px 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--bg-elev);
+  color: var(--text);
+  font-size: var(--fs-base);
+  cursor: pointer;
+}
+
+.status-select:focus {
+  outline: none;
+  border-color: var(--accent);
 }
 
 .field-row {
@@ -898,17 +982,17 @@ select {
 
 .auth-sub {
   color: var(--text-dim);
-  font-size: 14px;
+  font-size: var(--fs-base);
   margin-bottom: 24px;
 }
 
 .error-msg {
-  background: rgba(239, 68, 68, 0.12);
+  background: var(--down-soft);
   color: var(--down);
-  border: 1px solid rgba(239, 68, 68, 0.3);
+  border: 1px solid var(--down-border);
   padding: 10px 12px;
-  border-radius: 8px;
-  font-size: 13px;
+  border-radius: var(--radius-sm);
+  font-size: var(--fs-md);
   margin-bottom: 16px;
 }
 
@@ -920,7 +1004,7 @@ select {
 
 .muted {
   color: var(--text-dim);
-  font-size: 13px;
+  font-size: var(--fs-md);
 }
 
 /* Detail view */
@@ -943,13 +1027,13 @@ select {
 }
 
 .stat-card .label {
-  font-size: 12px;
+  font-size: var(--fs-sm);
   color: var(--text-dim);
   text-transform: uppercase;
 }
 
 .stat-card .big {
-  font-size: 22px;
+  font-size: var(--fs-3xl);
   font-weight: 700;
 }
 
@@ -966,7 +1050,7 @@ select {
   gap: 12px;
   padding: 12px 16px;
   border-bottom: 1px solid var(--border);
-  font-size: 14px;
+  font-size: var(--fs-base);
 }
 
 .event-row:last-child {
@@ -975,7 +1059,7 @@ select {
 
 .event-time {
   color: var(--text-dim);
-  font-size: 13px;
+  font-size: var(--fs-md);
   margin-left: auto;
 }
 
@@ -1001,15 +1085,15 @@ select {
 }
 
 .section-head h2 {
-  font-size: 20px;
+  font-size: var(--fs-2xl);
   font-weight: 600;
   margin: 0;
 }
 
 /* Collapse/expand caret; rotates to point right when the section is collapsed. */
 .section-caret {
-  font-size: 20px;
-  color: var(--muted);
+  font-size: var(--fs-2xl);
+  color: var(--text-dim);
   transition: transform 0.15s ease;
   transform: rotate(0deg);
 }
@@ -1035,18 +1119,18 @@ select {
 }
 
 .section-stat {
-  font-size: 13px;
+  font-size: var(--fs-md);
   font-weight: 600;
   white-space: nowrap;
 }
 
 /* Tag chips (used on cards, in the form picker and the filter bar). */
 .tag-chip {
-  font-size: 12px;
+  font-size: var(--fs-sm);
   font-weight: 600;
   line-height: 1;
   padding: 4px 10px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   border: 1px solid var(--border);
   background: transparent;
   color: var(--text);
@@ -1054,7 +1138,7 @@ select {
 }
 
 .tag-chip.readonly {
-  color: #fff;
+  color: var(--on-accent);
   cursor: default;
 }
 
@@ -1088,13 +1172,13 @@ button.tag-chip {
 }
 
 .status-filter-dd .btn.active {
-  border-color: var(--accent, var(--up));
+  border-color: var(--accent);
   color: var(--text);
 }
 
 .status-filter-dd .caret {
   margin-left: 4px;
-  font-size: 11px;
+  font-size: var(--fs-xs);
   opacity: 0.7;
 }
 
@@ -1117,8 +1201,8 @@ button.tag-chip {
   padding: 8px;
   background: var(--bg-elev);
   border: 1px solid var(--border);
-  border-radius: 10px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-pop);
 }
 
 .status-option {
@@ -1127,7 +1211,7 @@ button.tag-chip {
   gap: 9px;
   padding: 8px 10px;
   border-radius: 7px;
-  font-size: 14px;
+  font-size: var(--fs-base);
   color: var(--text-dim);
   transition: background 0.12s, color 0.12s;
 }
@@ -1177,7 +1261,7 @@ button.tag-chip {
 .search-icon {
   position: absolute;
   left: 12px;
-  font-size: 13px;
+  font-size: var(--fs-md);
   opacity: 0.6;
   pointer-events: none;
 }
@@ -1185,16 +1269,16 @@ button.tag-chip {
 .search-input {
   width: 100%;
   padding: 6px 32px;
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   border: 1px solid var(--border);
   background: var(--bg);
   color: var(--text);
-  font-size: 14px;
+  font-size: var(--fs-base);
 }
 
 .search-input:focus {
   outline: none;
-  border-color: var(--accent, var(--up));
+  border-color: var(--accent);
 }
 
 .search-clear {
@@ -1209,8 +1293,8 @@ button.tag-chip {
   border: none;
   border-radius: 50%;
   background: transparent;
-  color: var(--muted);
-  font-size: 13px;
+  color: var(--text-dim);
+  font-size: var(--fs-md);
   cursor: pointer;
 }
 
@@ -1230,13 +1314,13 @@ button.tag-chip:hover {
 }
 
 .tag-filter-dd .btn.active {
-  border-color: var(--accent, var(--up));
+  border-color: var(--accent);
   color: var(--text);
 }
 
 .tag-filter-dd .caret {
   margin-left: 4px;
-  font-size: 11px;
+  font-size: var(--fs-xs);
   opacity: 0.7;
 }
 
@@ -1248,10 +1332,10 @@ button.tag-chip:hover {
   height: 16px;
   margin-left: 4px;
   padding: 0 4px;
-  border-radius: 999px;
-  background: var(--accent, var(--up));
-  color: #fff;
-  font-size: 11px;
+  border-radius: var(--radius-pill);
+  background: var(--accent);
+  color: var(--on-accent);
+  font-size: var(--fs-xs);
   font-weight: 700;
   line-height: 1;
 }
@@ -1276,8 +1360,8 @@ button.tag-chip:hover {
   padding: 12px;
   background: var(--bg-elev);
   border: 1px solid var(--border);
-  border-radius: 10px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-pop);
 }
 
 .tag-menu-clear {
@@ -1296,12 +1380,12 @@ button.tag-chip:hover {
 
 .settings-block h2 {
   margin: 0 0 4px;
-  font-size: 16px;
+  font-size: var(--fs-lg);
 }
 
 .settings-block > .muted {
   margin: 0 0 16px;
-  font-size: 13px;
+  font-size: var(--fs-md);
 }
 
 .settings-add {
@@ -1328,12 +1412,12 @@ button.tag-chip:hover {
 .settings-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 14px;
+  font-size: var(--fs-base);
 }
 
 .settings-table th {
   text-align: left;
-  font-size: 11px;
+  font-size: var(--fs-xs);
   text-transform: uppercase;
   letter-spacing: 0.4px;
   color: var(--text-dim);

@@ -47,13 +47,12 @@ const statusFilters = [
 const filteredMonitors = computed(() => {
   const q = ui.monitorSearch.trim().toLowerCase();
   const tagIds = ui.activeTagIds;
-  const statuses = ui.activeStatuses;
+  const status = ui.activeStatus;
   return store.monitors.filter((m) => {
     const tagOk =
       tagIds.size === 0 ||
       (m.tags ?? []).some((t) => tagIds.has(t.id));
-    const statusOk =
-      statuses.size === 0 || statuses.has(m.stats?.status ?? -1);
+    const statusOk = status == null || (m.stats?.status ?? -1) === status;
     const searchOk =
       q === "" ||
       m.name.toLowerCase().includes(q) ||
@@ -120,8 +119,12 @@ const sections = computed(() => {
 const showForm = ref(false);
 const editing = ref<Monitor | null>(null);
 
-// Whether the toolbar's status-filter dropdown is open.
-const statusMenuOpen = ref(false);
+// Status-filter dropdown: a plain single-select. Empty option ("") clears the
+// filter (null); any other option filters to that single status code.
+function onStatusChange(e: Event) {
+  const v = (e.target as HTMLSelectElement).value;
+  ui.activeStatus = v === "" ? null : Number(v);
+}
 
 interface LogModal {
   name: string;
@@ -264,48 +267,17 @@ async function showLogFiles(m: Monitor) {
   <div class="page-head">
     <h1>Monitors</h1>
     <div class="page-actions">
-      <div class="status-filter-dd">
-        <button
-          type="button"
-          class="btn btn-sm"
-          :class="{ active: ui.activeStatuses.size }"
-          title="Filter monitors by status"
-          @click="statusMenuOpen = !statusMenuOpen"
-        >
-          Status
-          <span v-if="ui.activeStatuses.size" class="filter-badge">
-            {{ ui.activeStatuses.size }}
-          </span>
-          <span class="caret">▾</span>
-        </button>
-        <template v-if="statusMenuOpen">
-          <div class="status-menu-backdrop" @click="statusMenuOpen = false"></div>
-          <div class="status-menu">
-            <button
-              v-for="s in statusFilters"
-              :key="s.value"
-              type="button"
-              class="status-option"
-              :class="{ active: ui.activeStatuses.has(s.value) }"
-              @click="ui.toggleStatusFilter(s.value)"
-            >
-              <span class="status-chip-dot" :style="{ background: s.color }"></span>
-              <span class="status-option-label">{{ s.label }}</span>
-              <span class="status-option-check">
-                {{ ui.activeStatuses.has(s.value) ? "✓" : "" }}
-              </span>
-            </button>
-            <button
-              v-if="ui.activeStatuses.size"
-              type="button"
-              class="btn btn-sm status-menu-clear"
-              @click="ui.clearStatusFilter()"
-            >
-              Clear filter
-            </button>
-          </div>
-        </template>
-      </div>
+      <select
+        class="status-select"
+        title="Filter monitors by status"
+        :value="ui.activeStatus ?? ''"
+        @change="onStatusChange"
+      >
+        <option value="">All statuses</option>
+        <option v-for="s in statusFilters" :key="s.value" :value="s.value">
+          {{ s.label }}
+        </option>
+      </select>
       <div class="search-box">
         <span class="search-icon">🔍</span>
         <input
