@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref } from "vue";
+import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useMonitorStore } from "../stores/monitors";
 import { getSocket } from "../socket";
-import type { Heartbeat, Monitor } from "../types";
+import type { Heartbeat, LogFileEntry, Monitor } from "../types";
 import HeartbeatBar from "../components/HeartbeatBar.vue";
-import { ms, relTime, statusLabel, uptimePct } from "../format";
+import MonitorForm from "../components/MonitorForm.vue";
+import { fileSize, ms, relTime, statusLabel, uptimePct } from "../format";
 
 const route = useRoute();
 const router = useRouter();
@@ -14,6 +15,54 @@ const store = useMonitorStore();
 const monitor = ref<Monitor | null>(null);
 const beats = ref<Heartbeat[]>([]);
 const id = Number(route.params.id);
+
+// Adjustable heartbeat-bar scale: how many hours (1..24) the bar spans. The
+// beats within that window are binned into one bar per fixed slice of time
+// (BUCKET_MINUTES), so the number of bars grows with the window: a wide scale
+// shows many thin bars, a narrow scale shows few wide ones — all filling the
+// card's width.
+const BUCKET_MINUTES = 10;
+const rangeHours = ref(6);
+
+// How many bars the current window is split into (one per BUCKET_MINUTES).
+const slotCount = computed(() =>
+  Math.round((rangeHours.value * 60) / BUCKET_MINUTES),
+);
+
+// Fetch the heartbeats for the currently selected window from the server.
+async function loadBeats() {
+  beats.value = await store.heartbeatsSince(id, rangeHours.value);
+}
+
+// Bin `beats` into `slotCount` equal time buckets spanning [now - range, now].
+// Each bucket collapses to the worst status it saw (down > degraded >
+// maintenance > up); empty buckets become null placeholders.
+const severity: Record<number, number> = { 0: 3, 2: 2, 3: 1, 1: 0 };
+const bucketedBeats = computed<(Heartbeat | null)[]>(() => {
+  const slots = slotCount.value;
+  const nowSec = Date.now() / 1000;
+  const spanSec = rangeHours.value * 3600;
+  const start = nowSec - spanSec;
+  const width = spanSec / slots;
+  const buckets: (Heartbeat | null)[] = Array.from({ length: slots }, () => null);
+  for (const b of beats.value) {
+    const idx = Math.floor((b.time - start) / width);
+    if (idx < 0 || idx >= slots) continue;
+    const cur = buckets[idx];
+    // Keep the most severe beat; on a tie prefer the most recent one.
+    if (
+      !cur ||
+      severity[b.status] > severity[cur.status] ||
+      (severity[b.status] === severity[cur.status] && b.time > cur.time)
+    ) {
+      buckets[idx] = b;
+    }
+  }
+  return buckets;
+});
+
+// Human label for the current scale (e.g. "6h", "1h").
+const rangeLabel = computed(() => `${rangeHours.value}h`);
 
 // "Restart" button state: whether a restart is in flight, and the last outcome
 // shown next to the button (empty = nothing to show yet).
@@ -38,9 +87,84 @@ async function restartProgram() {
   }
 }
 
+// "Online users" button state: whether a remote-log read is in flight. The
+// result lives on the local `monitor` ref (this view holds its own copy fetched
+// via store.get, not the store's list), so we update it directly.
+const checkingUsers = ref(false);
+async function checkUsers() {
+  if (!monitor.value) return;
+  checkingUsers.value = true;
+  try {
+    const { users, error } = await store.checkUsers(id);
+    monitor.value.users = users;
+    monitor.value.usersError = error;
+  } catch (e: any) {
+    monitor.value.usersError =
+      e?.response?.data?.error ?? "Could not read the remote log.";
+  } finally {
+    checkingUsers.value = false;
+  }
+}
+
+// Pause/resume this monitor, then refresh the local copy so the toolbox and
+// header reflect the new active state.
+async function toggleActive() {
+  await store.toggle(id);
+  monitor.value = await store.get(id);
+}
+
+function openWebPage(m: Monitor) {
+  window.open(m.target, "_blank", "noopener");
+}
+
+// Edit modal state. On save we re-fetch the monitor to pick up the changes.
+const showForm = ref(false);
+async function onSaved(payload: Partial<Monitor>) {
+  await store.update(id, payload);
+  showForm.value = false;
+  monitor.value = await store.get(id);
+}
+
+async function remove() {
+  if (!monitor.value) return;
+  if (confirm(`Delete monitor "${monitor.value.name}"?`)) {
+    await store.remove(id);
+    router.push("/");
+  }
+}
+
+// Log-files modal (mirrors the monitors list). Kept alongside the hidden
+// toolbox button so re-enabling it stays consistent across both views.
+interface LogModal {
+  name: string;
+  folder: string;
+  files: LogFileEntry[];
+  loading: boolean;
+  error: string;
+}
+const logModal = ref<LogModal | null>(null);
+async function showLogFiles(m: Monitor) {
+  logModal.value = { name: m.name, folder: "", files: [], loading: true, error: "" };
+  try {
+    const { folder, files } = await store.logFiles(m.id);
+    logModal.value = { name: m.name, folder, files, loading: false, error: "" };
+  } catch (e: any) {
+    logModal.value = {
+      name: m.name,
+      folder: "",
+      files: [],
+      loading: false,
+      error: e?.response?.data?.error ?? "Could not read the log folder.",
+    };
+  }
+}
+
 function onHeartbeat(p: { monitorId: number; heartbeat: Heartbeat }) {
   if (p.monitorId !== id) return;
-  beats.value = [...beats.value, p.heartbeat].slice(-100);
+  // Append and drop anything now older than the selected window so the bar
+  // stays bounded even for wide (24h) scales with many beats.
+  const cutoff = Date.now() / 1000 - rangeHours.value * 3600;
+  beats.value = [...beats.value, p.heartbeat].filter((b) => b.time >= cutoff);
   if (monitor.value) {
     monitor.value.stats = {
       ...(monitor.value.stats as any),
@@ -53,9 +177,12 @@ function onHeartbeat(p: { monitorId: number; heartbeat: Heartbeat }) {
 
 onMounted(async () => {
   monitor.value = await store.get(id);
-  beats.value = monitor.value.heartbeats ?? [];
+  await loadBeats();
   getSocket()?.on("heartbeat", onHeartbeat);
 });
+
+// Reload the window whenever the user changes the scale.
+watch(rangeHours, loadBeats);
 
 onUnmounted(() => {
   getSocket()?.off("heartbeat", onHeartbeat);
@@ -103,7 +230,7 @@ const events = computed(() =>
           {{ monitor.interval }}s
         </div>
       </div>
-      <div style="display: flex; align-items: center; gap: 12px">
+      <div class="detail-actions">
         <span
           v-if="restartMsg"
           class="muted"
@@ -112,27 +239,87 @@ const events = computed(() =>
         >
           {{ restartMsg.ok ? "✓" : "⚠" }} {{ restartMsg.text }}
         </span>
-        <!-- Remote Desktop temporarily hidden (pending IT review of the launch
-             mechanism): remove v-if="false" to re-enable. -->
-        <button
-          v-if="false"
-          class="btn"
-          title="Open a Remote Desktop login to this host (needs the one-time pulsar-rdp setup)"
-          @click="openRemoteDesktop(monitor)"
-        >
-          🖥️ Remote Desktop
-        </button>
-        <!-- Restart temporarily hidden: set v-if back to monitor.type === 'http-ping' to re-enable. -->
-        <button
-          v-if="false"
-          class="btn"
-          title="Stop and restart the STAP backend on the host (starts it if not running)"
-          :disabled="restarting"
-          @click="restartProgram"
-        >
-          {{ restarting ? "⏳ Restarting…" : "🔄 Restart" }}
-        </button>
-        <button class="btn" @click="router.push('/')">← Back</button>
+        <div class="monitor-actions">
+          <button
+            v-if="monitor.type === 'http' || monitor.type === 'http-ping'"
+            class="btn btn-sm"
+            title="Open the monitored page in a new tab"
+            @click="openWebPage(monitor)"
+          >
+            🌐 Open
+          </button>
+          <!-- Remote Desktop temporarily hidden (pending IT review of the
+               launch mechanism): remove v-if="false" to re-enable. -->
+          <button
+            v-if="false"
+            class="btn btn-sm"
+            title="Open a Remote Desktop login to this host"
+            @click="openRemoteDesktop(monitor)"
+          >
+            🖥️ Remote Desktop
+          </button>
+          <button
+            v-if="monitor.type === 'http-ping'"
+            class="btn btn-sm"
+            title="Read the remote log and list the logged-in users"
+            :disabled="checkingUsers"
+            @click="checkUsers"
+          >
+            {{ checkingUsers ? "⏳ Checking…" : "👥 Online users" }}
+          </button>
+          <!-- Log files temporarily hidden: set v-if back to
+               monitor.type === 'http-ping' to re-enable. -->
+          <button
+            v-if="false"
+            class="btn btn-sm"
+            title="List the files in the remote log folder"
+            @click="showLogFiles(monitor)"
+          >
+            📁 Log files
+          </button>
+          <!-- Restart temporarily hidden: set v-if back to
+               monitor.type === 'http-ping' to re-enable. -->
+          <button
+            v-if="false"
+            class="btn btn-sm"
+            title="Stop and restart the STAP backend on the host"
+            :disabled="restarting"
+            @click="restartProgram"
+          >
+            {{ restarting ? "⏳ Restarting…" : "🔄 Restart" }}
+          </button>
+          <button
+            class="btn btn-sm"
+            :title="monitor.active ? 'Pause monitoring' : 'Resume monitoring'"
+            @click="toggleActive"
+          >
+            {{ monitor.active ? "⏸️ Pause" : "▶️ Resume" }}
+          </button>
+          <button class="btn btn-sm" title="Edit this monitor" @click="showForm = true">
+            ✏️ Edit
+          </button>
+          <button class="btn btn-sm btn-danger" title="Delete this monitor" @click="remove">
+            🗑️ Delete
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div
+      v-if="monitor.type === 'http-ping' && (monitor.users || monitor.usersError)"
+      class="stat-card"
+      style="margin-bottom: 16px"
+    >
+      <div v-if="monitor.users?.length" class="monitor-users">
+        <span class="label">Online Users:</span>
+        <span v-for="u in monitor.users" :key="u" class="user-chip">{{ u }}</span>
+      </div>
+      <div v-else-if="monitor.users && !monitor.usersError" class="monitor-users">
+        <span class="label">Online Users:</span>
+        <span class="muted">No users</span>
+      </div>
+      <div v-if="monitor.usersError" class="monitor-users-error" :title="monitor.usersError">
+        ⚠ Online Users: {{ monitor.usersError }}
       </div>
     </div>
 
@@ -159,12 +346,23 @@ const events = computed(() =>
       </div>
     </div>
 
-    <h3>Recent heartbeats</h3>
-    <div class="stat-card" style="margin-bottom: 24px">
-      <HeartbeatBar :beats="beats" :slots="100" />
-      <div class="muted" style="margin-top: 10px">
-        {{ monitor.stats?.lastMessage }}
+    <div class="hb-head">
+      <h3>Recent heartbeats</h3>
+      <div class="hb-scale">
+        <span class="hb-scale-label">Scale</span>
+        <input
+          v-model.number="rangeHours"
+          type="range"
+          min="1"
+          max="24"
+          step="1"
+          class="hb-scale-range"
+        />
+        <span class="hb-scale-value">{{ rangeLabel }}</span>
       </div>
+    </div>
+    <div class="stat-card" style="margin-bottom: 24px">
+      <HeartbeatBar :beats="bucketedBeats" :slots="slotCount" />
     </div>
 
     <h3>Events</h3>
@@ -180,4 +378,50 @@ const events = computed(() =>
     </div>
   </div>
   <div v-else class="empty">Loading…</div>
+
+  <MonitorForm
+    v-if="showForm && monitor"
+    :monitor="monitor"
+    @close="showForm = false"
+    @saved="onSaved"
+  />
+
+  <div v-if="logModal" class="modal-backdrop" @click.self="logModal = null">
+    <div class="modal">
+      <h2>Log files — {{ logModal.name }}</h2>
+      <div
+        v-if="logModal.folder"
+        class="muted"
+        style="margin-bottom: 14px; word-break: break-all; font-size: 12px"
+      >
+        {{ logModal.folder }}
+      </div>
+
+      <div v-if="logModal.loading" class="muted">Loading…</div>
+      <div v-else-if="logModal.error" class="error-msg">{{ logModal.error }}</div>
+      <div v-else-if="logModal.files.length === 0" class="muted">
+        The folder is empty.
+      </div>
+      <table v-else class="log-files-table">
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Size</th>
+            <th>Modified</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="f in logModal.files" :key="f.name">
+            <td>{{ f.name }}</td>
+            <td>{{ fileSize(f.size) }}</td>
+            <td>{{ relTime(f.modified) }}</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="modal-actions">
+        <button class="btn" @click="logModal = null">Close</button>
+      </div>
+    </div>
+  </div>
 </template>

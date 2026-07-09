@@ -209,6 +209,14 @@ select {
   margin: 0;
 }
 
+/* Toolbox + Back button in the monitor-detail header. */
+.detail-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+}
+
 /* Buttons */
 .btn {
   border: 1px solid var(--border);
@@ -534,17 +542,31 @@ select {
 
 /* Heartbeat bar */
 .heartbeat-bar {
+  position: relative;
   display: flex;
-  gap: 3px;
+  gap: 2px;
   align-items: flex-end;
   height: 30px;
+  width: 100%;
 }
 
 .hb {
-  width: 6px;
+  /* Grow to share the bar's full width equally, so the row always fills the
+     card regardless of how many beats/buckets it holds. min-width:0 lets many
+     bars (a wide scale) pack in without overflowing the card. */
+  flex: 1 1 0;
+  min-width: 0;
   border-radius: 2px;
   background: var(--border);
-  transition: background 0.2s;
+  transition: background 0.2s, transform 0.15s ease, box-shadow 0.15s ease;
+  transform-origin: bottom center;
+  cursor: pointer;
+}
+
+/* Lift and scale the hovered heartbeat for a tactile feel. */
+.hb.active {
+  transform: scaleY(1.15) scaleX(1.35);
+  box-shadow: 0 0 0 2px var(--bg), 0 4px 10px rgba(0, 0, 0, 0.35);
 }
 
 .hb.up {
@@ -567,6 +589,165 @@ select {
 .heartbeat-bar.paused .hb {
   background: var(--text-dim);
   opacity: 0.4;
+}
+
+/* Modern floating tooltip shown when hovering a single heartbeat. It is
+   absolutely positioned inside the bar; `left` is set inline to the centre of
+   the hovered bar and it grows upward, centred via translateX(-50%). */
+.hb-tooltip {
+  position: absolute;
+  bottom: calc(100% + 12px);
+  transform: translateX(-50%);
+  z-index: 20;
+  min-width: 130px;
+  max-width: 260px;
+  padding: 9px 11px;
+  background: var(--bg-elev-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  pointer-events: none;
+  white-space: normal;
+}
+
+/* Little arrow pointing down to the hovered bar. */
+.hb-tooltip::after {
+  content: "";
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 6px solid transparent;
+  border-top-color: var(--bg-elev-2);
+}
+
+.hb-tooltip-head {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.hb-tooltip-msg {
+  margin-top: 5px;
+  font-size: 12px;
+  color: var(--text);
+  word-break: break-word;
+}
+
+.hb-tooltip-time {
+  margin-top: 4px;
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
+.hb-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: var(--text-dim);
+}
+
+.hb-dot.up {
+  background: var(--up);
+  box-shadow: 0 0 6px var(--up);
+}
+.hb-dot.down {
+  background: var(--down);
+  box-shadow: 0 0 6px var(--down);
+}
+.hb-dot.degraded {
+  background: var(--degraded);
+  box-shadow: 0 0 6px var(--degraded);
+}
+.hb-dot.maintenance {
+  background: var(--maintenance);
+  box-shadow: 0 0 6px var(--maintenance);
+}
+.hb-dot.empty,
+.hb-dot.paused {
+  background: var(--text-dim);
+}
+
+/* Fade + slight rise as the tooltip appears/disappears. */
+.hb-tip-enter-active,
+.hb-tip-leave-active {
+  transition: opacity 0.15s ease, transform 0.15s ease;
+}
+.hb-tip-enter-from,
+.hb-tip-leave-to {
+  opacity: 0;
+  transform: translateX(-50%) translateY(4px);
+}
+
+/* Heartbeat section header: title on the left, scale control on the right. */
+.hb-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.hb-scale {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.hb-scale-label {
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+.hb-scale-value {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  min-width: 30px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Slider that sets the heartbeat-bar time scale (1..24h). */
+.hb-scale-range {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 140px;
+  height: 4px;
+  border-radius: 3px;
+  background: var(--border);
+  outline: none;
+  cursor: pointer;
+}
+
+.hb-scale-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--text);
+  border: 2px solid var(--bg-elev);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+  transition: transform 0.12s ease;
+}
+
+.hb-scale-range::-webkit-slider-thumb:hover {
+  transform: scale(1.2);
+}
+
+.hb-scale-range::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--text);
+  border: 2px solid var(--bg-elev);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+  cursor: pointer;
 }
 
 /* Status LED — shown before the monitor name on each card (Monitors page) in
