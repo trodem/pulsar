@@ -3,6 +3,7 @@ import Login from "./views/Login.vue";
 import Dashboard from "./views/Dashboard.vue";
 import MonitorDetail from "./views/MonitorDetail.vue";
 import Notifications from "./views/Notifications.vue";
+import Settings from "./views/Settings.vue";
 
 const router = createRouter({
   history: createWebHistory(),
@@ -11,6 +12,7 @@ const router = createRouter({
     { path: "/", name: "dashboard", component: Dashboard },
     { path: "/monitor/:id", name: "monitor", component: MonitorDetail },
     { path: "/notifications", name: "notifications", component: Notifications },
+    { path: "/settings", name: "settings", component: Settings },
   ],
 });
 

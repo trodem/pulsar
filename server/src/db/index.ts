@@ -29,10 +29,18 @@ export function initSchema(): void {
       created_at INTEGER NOT NULL DEFAULT (unixepoch())
     );
 
+    CREATE TABLE IF NOT EXISTS groups (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      position INTEGER NOT NULL DEFAULT 0,
+      created_at INTEGER NOT NULL DEFAULT (unixepoch())
+    );
+
     CREATE TABLE IF NOT EXISTS monitors (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       name TEXT NOT NULL,
       type TEXT NOT NULL DEFAULT 'http',
+      group_id INTEGER REFERENCES groups(id) ON DELETE SET NULL,
       target TEXT NOT NULL,
       port INTEGER,
       interval INTEGER NOT NULL DEFAULT 60,
@@ -71,7 +79,38 @@ export function initSchema(): void {
     );
     CREATE UNIQUE INDEX IF NOT EXISTS idx_monitor_notifications
       ON monitor_notifications (monitor_id, notification_id);
+
+    CREATE TABLE IF NOT EXISTS tags (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL UNIQUE,
+      color TEXT NOT NULL DEFAULT '#4f9dff',
+      created_at INTEGER NOT NULL DEFAULT (unixepoch())
+    );
+
+    CREATE TABLE IF NOT EXISTS monitor_tags (
+      monitor_id INTEGER NOT NULL REFERENCES monitors(id) ON DELETE CASCADE,
+      tag_id INTEGER NOT NULL REFERENCES tags(id) ON DELETE CASCADE
+    );
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_monitor_tags
+      ON monitor_tags (monitor_id, tag_id);
   `);
+
+  // Migrate pre-existing databases whose monitors table predates the groups
+  // feature: add the group_id column if it's missing (CREATE TABLE IF NOT
+  // EXISTS above is a no-op once the table exists).
+  if (!columnExists("monitors", "group_id")) {
+    sqlite.exec(
+      "ALTER TABLE monitors ADD COLUMN group_id INTEGER REFERENCES groups(id) ON DELETE SET NULL;",
+    );
+  }
+}
+
+/** True if `table` already has a column named `column`. */
+function columnExists(table: string, column: string): boolean {
+  const cols = sqlite
+    .prepare(`PRAGMA table_info(${table})`)
+    .all() as { name: string }[];
+  return cols.some((c) => c.name === column);
 }
 
 export { sqlite };

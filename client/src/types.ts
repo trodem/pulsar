@@ -16,12 +16,27 @@ export interface MonitorStats {
   avgPing: number | null;
 }
 
+export interface Group {
+  id: number;
+  name: string;
+  position: number;
+  createdAt: number;
+}
+
+export interface Tag {
+  id: number;
+  name: string;
+  color: string; // #rrggbb
+  createdAt: number;
+}
+
 export interface Monitor {
   id: number;
   name: string;
   type: "http" | "tcp" | "ping" | "http-ping";
   target: string;
   port: number | null;
+  groupId: number | null;
   interval: number;
   timeout: number;
   retries: number;
@@ -32,6 +47,10 @@ export interface Monitor {
   stats?: MonitorStats;
   heartbeats?: Heartbeat[];
   notificationIds?: number[];
+  // Colored labels attached to this monitor.
+  tags?: Tag[];
+  // Ids of the attached tags (returned by the detail endpoint, for the form).
+  tagIds?: number[];
   // Logged-in users extracted from the STAP log (http-ping monitors only).
   users?: string[];
   // Error while reading that log (null when healthy, undefined when N/A).

@@ -616,3 +616,140 @@ select {
   font-size: 13px;
   margin-left: auto;
 }
+
+/* --- Groups & tags -------------------------------------------------------- */
+
+/* Dashboard sections (one per group). */
+.monitor-section {
+  margin-bottom: 26px;
+}
+
+.section-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin: 0 0 12px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--border);
+}
+
+.section-head h2 {
+  font-size: 15px;
+  font-weight: 600;
+  margin: 0;
+}
+
+/* Tag chips (used on cards, in the form picker and the filter bar). */
+.tag-chip {
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text);
+  white-space: nowrap;
+}
+
+.tag-chip.readonly {
+  color: #fff;
+  cursor: default;
+}
+
+.tag-picker,
+.monitor-tags,
+.tag-filter {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.monitor-tags {
+  margin-top: 8px;
+}
+
+.tag-filter {
+  margin-bottom: 18px;
+}
+
+button.tag-chip {
+  cursor: pointer;
+  transition: filter 0.12s ease;
+}
+
+button.tag-chip:hover {
+  filter: brightness(1.15);
+}
+
+/* Settings (Groups & Tags management). */
+.settings-block {
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px;
+  margin-bottom: 22px;
+}
+
+.settings-block h2 {
+  margin: 0 0 4px;
+  font-size: 16px;
+}
+
+.settings-block > .muted {
+  margin: 0 0 16px;
+  font-size: 13px;
+}
+
+.settings-add {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.settings-add input:not(.pos-input):not(.color-input) {
+  flex: 1;
+  min-width: 180px;
+}
+
+.pos-input {
+  width: 80px;
+}
+
+.color-input {
+  width: 46px;
+  padding: 2px;
+}
+
+.settings-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.settings-table th {
+  text-align: left;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: var(--text-dim);
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--border);
+}
+
+.settings-table td {
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--border);
+}
+
+.settings-table .pos-col {
+  width: 90px;
+}
+
+.settings-table .row-actions {
+  text-align: right;
+  width: 1%;
+  white-space: nowrap;
+}

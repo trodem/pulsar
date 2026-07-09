@@ -2,11 +2,15 @@
 import { computed, onMounted, reactive, ref } from "vue";
 import type { Monitor } from "../types";
 import { useNotificationStore } from "../stores/notifications";
+import { useGroupStore } from "../stores/groups";
+import { useTagStore } from "../stores/tags";
 
 const props = defineProps<{ monitor?: Monitor | null }>();
 const emit = defineEmits<{ close: []; saved: [payload: Partial<Monitor>] }>();
 
 const notificationStore = useNotificationStore();
+const groupStore = useGroupStore();
+const tagStore = useTagStore();
 const error = ref("");
 const saving = ref(false);
 
@@ -15,6 +19,7 @@ const form = reactive<Partial<Monitor>>({
   type: props.monitor?.type ?? "http",
   target: props.monitor?.target ?? "",
   port: props.monitor?.port ?? null,
+  groupId: props.monitor?.groupId ?? null,
   interval: props.monitor?.interval ?? 60,
   timeout: props.monitor?.timeout ?? 10,
   retries: props.monitor?.retries ?? 0,
@@ -22,6 +27,7 @@ const form = reactive<Partial<Monitor>>({
   method: props.monitor?.method ?? "GET",
   active: props.monitor?.active ?? true,
   notificationIds: props.monitor?.notificationIds ?? [],
+  tagIds: props.monitor?.tagIds ?? props.monitor?.tags?.map((t) => t.id) ?? [],
 });
 
 // http-ping shares the URL/method/status inputs with plain http.
@@ -29,11 +35,22 @@ const isHttp = computed(
   () => form.type === "http" || form.type === "http-ping",
 );
 
-onMounted(() => notificationStore.fetchAll());
+onMounted(() => {
+  notificationStore.fetchAll();
+  groupStore.fetchAll();
+  tagStore.fetchAll();
+});
 
 function toggleNotification(id: number) {
   const list = form.notificationIds ?? [];
   form.notificationIds = list.includes(id)
+    ? list.filter((x) => x !== id)
+    : [...list, id];
+}
+
+function toggleTag(id: number) {
+  const list = form.tagIds ?? [];
+  form.tagIds = list.includes(id)
     ? list.filter((x) => x !== id)
     : [...list, id];
 }
@@ -101,6 +118,16 @@ async function save() {
         />
       </div>
 
+      <div class="field">
+        <label>Group</label>
+        <select v-model="form.groupId">
+          <option :value="null">— Ungrouped —</option>
+          <option v-for="g in groupStore.items" :key="g.id" :value="g.id">
+            {{ g.name }}
+          </option>
+        </select>
+      </div>
+
       <div class="field-row" v-if="isHttp">
         <div class="field">
           <label>Method</label>
@@ -128,6 +155,28 @@ async function save() {
         <div class="field">
           <label>Retries</label>
           <input v-model.number="form.retries" type="number" min="0" />
+        </div>
+      </div>
+
+      <div class="field" v-if="tagStore.items.length">
+        <label>Tags</label>
+        <div class="tag-picker">
+          <button
+            v-for="t in tagStore.items"
+            :key="t.id"
+            type="button"
+            class="tag-chip"
+            :class="{ selected: form.tagIds?.includes(t.id) }"
+            :style="{
+              '--tag-color': t.color,
+              background: form.tagIds?.includes(t.id) ? t.color : 'transparent',
+              borderColor: t.color,
+              color: form.tagIds?.includes(t.id) ? '#fff' : t.color,
+            }"
+            @click="toggleTag(t.id)"
+          >
+            {{ t.name }}
+          </button>
         </div>
       </div>
 

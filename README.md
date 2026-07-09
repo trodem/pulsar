@@ -6,6 +6,7 @@ built with an Express + TypeScript backend, a Vue 3 frontend, and a SQLite datab
 ## Features
 
 - Monitor types: **HTTP(s)**, **TCP port**, **Ping**
+- **Groups** (dashboard sections) and colored **tags** with tag-based filtering
 - Per-monitor interval, timeout, retries, and accepted status codes
 - Live dashboard over **WebSocket** (Socket.IO): heartbeat bars, 24h uptime %, latency
 - History / event log of up⇄down transitions

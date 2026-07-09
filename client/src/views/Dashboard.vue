@@ -2,6 +2,8 @@
 import { computed, onMounted, ref, watch } from "vue";
 import { useRouter } from "vue-router";
 import { useMonitorStore } from "../stores/monitors";
+import { useGroupStore } from "../stores/groups";
+import { useTagStore } from "../stores/tags";
 import { useUiStore } from "../stores/ui";
 import type { LogFileEntry, Monitor } from "../types";
 import HeartbeatBar from "../components/HeartbeatBar.vue";
@@ -9,8 +11,43 @@ import MonitorForm from "../components/MonitorForm.vue";
 import { fileSize, ms, relTime, statusLabel, uptimePct } from "../format";
 
 const store = useMonitorStore();
+const groupStore = useGroupStore();
+const tagStore = useTagStore();
 const ui = useUiStore();
 const router = useRouter();
+
+// Tag ids selected in the filter bar. Empty = show everything. A monitor
+// passes the filter when it carries at least one of the selected tags.
+const activeTagIds = ref<Set<number>>(new Set());
+
+function toggleTagFilter(id: number) {
+  const next = new Set(activeTagIds.value);
+  next.has(id) ? next.delete(id) : next.add(id);
+  activeTagIds.value = next;
+}
+
+const filteredMonitors = computed(() => {
+  if (activeTagIds.value.size === 0) return store.monitors;
+  return store.monitors.filter((m) =>
+    (m.tags ?? []).some((t) => activeTagIds.value.has(t.id)),
+  );
+});
+
+// Monitors split into dashboard sections: one per group (in the group store's
+// order), then an "Ungrouped" section. Empty sections are dropped.
+const sections = computed(() => {
+  const list = filteredMonitors.value;
+  const out: { id: number | null; name: string; monitors: Monitor[] }[] = [];
+  for (const g of groupStore.items) {
+    const monitors = list.filter((m) => m.groupId === g.id);
+    if (monitors.length) out.push({ id: g.id, name: g.name, monitors });
+  }
+  const ungrouped = list.filter((m) => m.groupId == null);
+  if (ungrouped.length) {
+    out.push({ id: null, name: "Ungrouped", monitors: ungrouped });
+  }
+  return out;
+});
 
 // The global toolbar's "+ New monitor" button opens this page's form.
 watch(
@@ -51,7 +88,11 @@ async function checkUsers(m: Monitor) {
 }
 
 onMounted(async () => {
-  await store.fetchAll();
+  await Promise.all([
+    store.fetchAll(),
+    groupStore.fetchAll(),
+    tagStore.fetchAll(),
+  ]);
   store.bindSocket();
 });
 
@@ -169,14 +210,50 @@ async function showLogFiles(m: Monitor) {
     </div>
   </div>
 
+  <div v-if="tagStore.items.length" class="tag-filter">
+    <span class="muted">Filter:</span>
+    <button
+      v-for="t in tagStore.items"
+      :key="t.id"
+      type="button"
+      class="tag-chip"
+      :class="{ selected: activeTagIds.has(t.id) }"
+      :style="{
+        background: activeTagIds.has(t.id) ? t.color : 'transparent',
+        borderColor: t.color,
+        color: activeTagIds.has(t.id) ? '#fff' : t.color,
+      }"
+      @click="toggleTagFilter(t.id)"
+    >
+      {{ t.name }}
+    </button>
+    <button
+      v-if="activeTagIds.size"
+      type="button"
+      class="btn btn-sm"
+      @click="activeTagIds = new Set()"
+    >
+      Clear
+    </button>
+  </div>
+
   <div v-if="store.monitors.length === 0" class="empty">
     <p>No monitors yet.</p>
     <button class="btn btn-primary" @click="openNew">Add your first monitor</button>
   </div>
 
-  <div class="monitor-grid">
-    <div v-for="m in store.monitors" :key="m.id" class="monitor-card">
-      <div>
+  <div v-else-if="sections.length === 0" class="empty">
+    <p>No monitors match the selected tags.</p>
+  </div>
+
+  <div v-for="section in sections" :key="section.id ?? 'ungrouped'" class="monitor-section">
+    <div class="section-head">
+      <h2>{{ section.name }}</h2>
+      <span class="muted">{{ section.monitors.length }}</span>
+    </div>
+    <div class="monitor-grid">
+      <div v-for="m in section.monitors" :key="m.id" class="monitor-card">
+        <div>
         <div class="monitor-top">
           <span class="status-pill" :class="statusLabel(m.stats?.status).cls">
             {{ statusLabel(m.stats?.status).text }}
@@ -189,6 +266,16 @@ async function showLogFiles(m: Monitor) {
         </div>
         <div class="monitor-target">
           {{ m.target }}<span v-if="m.port">:{{ m.port }}</span>
+        </div>
+        <div v-if="m.tags?.length" class="monitor-tags">
+          <span
+            v-for="t in m.tags"
+            :key="t.id"
+            class="tag-chip readonly"
+            :style="{ background: t.color, borderColor: t.color }"
+          >
+            {{ t.name }}
+          </span>
         </div>
         <div v-if="m.users?.length" class="monitor-users">
           <span class="label">Users:</span>
@@ -258,6 +345,7 @@ async function showLogFiles(m: Monitor) {
           <button class="btn btn-sm" @click="openEdit(m)">Edit</button>
           <button class="btn btn-sm btn-danger" @click="remove(m)">Delete</button>
         </div>
+      </div>
       </div>
     </div>
   </div>

@@ -1,8 +1,14 @@
 import { Router } from "express";
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "../db/index.js";
-import { monitorNotifications, monitors } from "../db/schema.js";
+import {
+  monitorNotifications,
+  monitorTags,
+  monitors,
+  tags,
+  type Tag,
+} from "../db/schema.js";
 import { monitorStats, recentHeartbeats } from "../monitors/stats.js";
 import { reschedule, unschedule } from "../monitors/scheduler.js";
 import {
@@ -35,6 +41,7 @@ const monitorSchema = z.object({
   type: z.enum(["http", "tcp", "ping", "http-ping"]),
   target: z.string().min(1).max(500),
   port: z.number().int().min(1).max(65535).nullable().optional(),
+  groupId: z.number().int().nullable().optional(),
   interval: z.number().int().min(5).max(86400).default(60),
   timeout: z.number().int().min(1).max(120).default(10),
   retries: z.number().int().min(0).max(10).default(0),
@@ -42,6 +49,7 @@ const monitorSchema = z.object({
   method: z.string().default("GET"),
   active: z.boolean().default(true),
   notificationIds: z.array(z.number().int()).default([]),
+  tagIds: z.array(z.number().int()).default([]),
 });
 
 function setMonitorNotifications(monitorId: number, ids: number[]) {
@@ -64,13 +72,52 @@ function linkedNotificationIds(monitorId: number): number[] {
     .map((r) => r.id);
 }
 
+function setMonitorTags(monitorId: number, ids: number[]) {
+  db.delete(monitorTags).where(eq(monitorTags.monitorId, monitorId)).run();
+  for (const tagId of ids) {
+    db.insert(monitorTags).values({ monitorId, tagId }).run();
+  }
+}
+
+// Full tag objects (with color) attached to a monitor, for rendering chips.
+function tagsForMonitor(monitorId: number): Tag[] {
+  return db
+    .select({ tag: tags })
+    .from(monitorTags)
+    .innerJoin(tags, eq(monitorTags.tagId, tags.id))
+    .where(eq(monitorTags.monitorId, monitorId))
+    .all()
+    .map((r) => r.tag);
+}
+
+// Loads the tags for many monitors at once, grouped by monitor id, so the list
+// endpoint doesn't run one query per monitor.
+function tagsByMonitor(monitorIds: number[]): Map<number, Tag[]> {
+  const byMonitor = new Map<number, Tag[]>();
+  if (monitorIds.length === 0) return byMonitor;
+  const rows = db
+    .select({ monitorId: monitorTags.monitorId, tag: tags })
+    .from(monitorTags)
+    .innerJoin(tags, eq(monitorTags.tagId, tags.id))
+    .where(inArray(monitorTags.monitorId, monitorIds))
+    .all();
+  for (const { monitorId, tag } of rows) {
+    const list = byMonitor.get(monitorId) ?? [];
+    list.push(tag);
+    byMonitor.set(monitorId, list);
+  }
+  return byMonitor;
+}
+
 // List monitors with live status + stats for the dashboard.
 router.get("/", (_req, res) => {
   const all = db.select().from(monitors).all();
+  const tagMap = tagsByMonitor(all.map((m) => m.id));
   const data = all.map((m) => ({
     ...m,
     stats: monitorStats(m.id),
     heartbeats: recentHeartbeats(m.id, 40),
+    tags: tagMap.get(m.id) ?? [],
     users: stapUsersFor(m),
     usersError: stapErrorFor(m),
   }));
@@ -84,11 +131,14 @@ router.get("/:id", (req, res) => {
     res.status(404).json({ error: "Monitor not found" });
     return;
   }
+  const tagList = tagsForMonitor(id);
   res.json({
     ...monitor,
     stats: monitorStats(id),
     heartbeats: recentHeartbeats(id, 100),
     notificationIds: linkedNotificationIds(id),
+    tags: tagList,
+    tagIds: tagList.map((t) => t.id),
     users: stapUsersFor(monitor),
     usersError: stapErrorFor(monitor),
   });
@@ -100,13 +150,14 @@ router.post("/", (req, res) => {
     res.status(400).json({ error: parsed.error.issues });
     return;
   }
-  const { notificationIds, ...values } = parsed.data;
+  const { notificationIds, tagIds, ...values } = parsed.data;
   const [created] = db
     .insert(monitors)
-    .values({ ...values, port: values.port ?? null })
+    .values({ ...values, port: values.port ?? null, groupId: values.groupId ?? null })
     .returning()
     .all();
   setMonitorNotifications(created.id, notificationIds);
+  setMonitorTags(created.id, tagIds);
   reschedule(created.id);
   res.status(201).json(created);
 });
@@ -123,14 +174,15 @@ router.put("/:id", (req, res) => {
     res.status(400).json({ error: parsed.error.issues });
     return;
   }
-  const { notificationIds, ...values } = parsed.data;
+  const { notificationIds, tagIds, ...values } = parsed.data;
   const [updated] = db
     .update(monitors)
-    .set({ ...values, port: values.port ?? null })
+    .set({ ...values, port: values.port ?? null, groupId: values.groupId ?? null })
     .where(eq(monitors.id, id))
     .returning()
     .all();
   setMonitorNotifications(id, notificationIds);
+  setMonitorTags(id, tagIds);
   reschedule(id);
   res.json(updated);
 });
