@@ -18,7 +18,7 @@ function logout() {
 <template>
   <div v-if="showShell" class="app-shell">
     <aside class="sidebar">
-      <div class="brand"><span class="dot"></span> Uptime Clone</div>
+      <div class="brand"><span class="dot"></span> Pulsar</div>
       <router-link
         class="nav-link"
         :class="{ active: route.name === 'dashboard' }"

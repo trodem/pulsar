@@ -41,7 +41,7 @@ async function submit() {
 <template>
   <div class="auth-wrap">
     <form class="auth-card" @submit.prevent="submit">
-      <h1><span class="dot" style="width:14px;height:14px;border-radius:50%;background:var(--up);display:inline-block"></span> Uptime Clone</h1>
+      <h1><span class="dot" style="width:14px;height:14px;border-radius:50%;background:var(--accent);display:inline-block"></span> Pulsar</h1>
       <p class="auth-sub">
         {{ needsSetup ? "Create your admin account to get started." : "Sign in to your dashboard." }}
       </p>
