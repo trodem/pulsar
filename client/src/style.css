@@ -551,6 +551,10 @@ select {
 }
 
 .monitor-users .label {
+  /* Full-width so the label sits on its own line and the user pills wrap
+     onto the line(s) below it, rather than all on one row. */
+  flex-basis: 100%;
+  margin-bottom: 2px;
   font-size: var(--fs-xs);
   text-transform: uppercase;
   letter-spacing: 0.4px;
