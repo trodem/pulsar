@@ -1,6 +1,7 @@
 import { createRouter, createWebHistory } from "vue-router";
 import Login from "./views/Login.vue";
 import Dashboard from "./views/Dashboard.vue";
+import Monitors from "./views/Monitors.vue";
 import MonitorDetail from "./views/MonitorDetail.vue";
 import Notifications from "./views/Notifications.vue";
 import Settings from "./views/Settings.vue";
@@ -10,6 +11,7 @@ const router = createRouter({
   routes: [
     { path: "/login", name: "login", component: Login },
     { path: "/", name: "dashboard", component: Dashboard },
+    { path: "/monitors", name: "monitors", component: Monitors },
     { path: "/monitor/:id", name: "monitor", component: MonitorDetail },
     { path: "/notifications", name: "notifications", component: Notifications },
     { path: "/settings", name: "settings", component: Settings },

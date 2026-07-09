@@ -63,6 +63,22 @@ function logout() {
         </router-link>
         <router-link
           class="nav-link"
+          :class="{ active: route.name === 'monitors' }"
+          to="/monitors"
+          title="Monitors"
+        >
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="8" y1="6" x2="21" y2="6" />
+            <line x1="8" y1="12" x2="21" y2="12" />
+            <line x1="8" y1="18" x2="21" y2="18" />
+            <line x1="3" y1="6" x2="3.01" y2="6" />
+            <line x1="3" y1="12" x2="3.01" y2="12" />
+            <line x1="3" y1="18" x2="3.01" y2="18" />
+          </svg>
+          <span class="nav-label">Monitors</span>
+        </router-link>
+        <router-link
+          class="nav-link"
           :class="{ active: route.name === 'notifications' }"
           to="/notifications"
           title="Notifications"
