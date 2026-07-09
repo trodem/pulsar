@@ -16,35 +16,91 @@ const tagStore = useTagStore();
 const ui = useUiStore();
 const router = useRouter();
 
-// Tag ids selected in the filter bar. Empty = show everything. A monitor
-// passes the filter when it carries at least one of the selected tags.
-const activeTagIds = ref<Set<number>>(new Set());
+// Section keys the user has collapsed. Persisted so the layout survives reloads.
+// Key is the group id as a string, or "ungrouped" for the catch-all section.
+const COLLAPSED_KEY = "dashboard.collapsedGroups";
+const collapsed = ref<Set<string>>(
+  new Set(JSON.parse(localStorage.getItem(COLLAPSED_KEY) ?? "[]")),
+);
 
-function toggleTagFilter(id: number) {
-  const next = new Set(activeTagIds.value);
-  next.has(id) ? next.delete(id) : next.add(id);
-  activeTagIds.value = next;
+function sectionKey(id: number | null): string {
+  return id == null ? "ungrouped" : String(id);
 }
 
+function toggleSection(id: number | null) {
+  const key = sectionKey(id);
+  const next = new Set(collapsed.value);
+  next.has(key) ? next.delete(key) : next.add(key);
+  collapsed.value = next;
+  localStorage.setItem(COLLAPSED_KEY, JSON.stringify([...next]));
+}
+
+// Search text and tag filter both live in the global toolbar and are shared
+// through the UI store. A monitor must match both. Empty filter = no filter.
 const filteredMonitors = computed(() => {
-  if (activeTagIds.value.size === 0) return store.monitors;
-  return store.monitors.filter((m) =>
-    (m.tags ?? []).some((t) => activeTagIds.value.has(t.id)),
-  );
+  const q = ui.monitorSearch.trim().toLowerCase();
+  const tagIds = ui.activeTagIds;
+  return store.monitors.filter((m) => {
+    const tagOk =
+      tagIds.size === 0 ||
+      (m.tags ?? []).some((t) => tagIds.has(t.id));
+    const searchOk =
+      q === "" ||
+      m.name.toLowerCase().includes(q) ||
+      m.target.toLowerCase().includes(q) ||
+      (m.tags ?? []).some((t) => t.name.toLowerCase().includes(q));
+    return tagOk && searchOk;
+  });
 });
 
+// Aggregate up/degraded/down counts and 24h uptime / latency averages over an
+// arbitrary set of monitors. Shared by the global summary and each group header.
+function computeStats(monitors: Monitor[]) {
+  const up = monitors.filter((m) => m.stats?.status === 1).length;
+  const degraded = monitors.filter((m) => m.stats?.status === 2).length;
+  const down = monitors.filter((m) => m.stats?.status === 0).length;
+
+  const uptimes = monitors
+    .map((m) => m.stats?.uptime24h)
+    .filter((v): v is number => v != null);
+  const avgUptime = uptimes.length
+    ? uptimes.reduce((a, b) => a + b, 0) / uptimes.length
+    : null;
+
+  const pings = monitors
+    .map((m) => m.stats?.avgPing)
+    .filter((v): v is number => v != null);
+  const avgPing = pings.length
+    ? pings.reduce((a, b) => a + b, 0) / pings.length
+    : null;
+
+  return { up, degraded, down, total: monitors.length, avgUptime, avgPing };
+}
+
 // Monitors split into dashboard sections: one per group (in the group store's
-// order), then an "Ungrouped" section. Empty sections are dropped.
+// order), then an "Ungrouped" section. Empty sections are dropped. Each section
+// carries its own aggregate stats, shown inline on the group header.
 const sections = computed(() => {
   const list = filteredMonitors.value;
-  const out: { id: number | null; name: string; monitors: Monitor[] }[] = [];
+  const out: {
+    id: number | null;
+    name: string;
+    monitors: Monitor[];
+    stats: ReturnType<typeof computeStats>;
+  }[] = [];
   for (const g of groupStore.items) {
     const monitors = list.filter((m) => m.groupId === g.id);
-    if (monitors.length) out.push({ id: g.id, name: g.name, monitors });
+    if (monitors.length)
+      out.push({ id: g.id, name: g.name, monitors, stats: computeStats(monitors) });
   }
   const ungrouped = list.filter((m) => m.groupId == null);
   if (ungrouped.length) {
-    out.push({ id: null, name: "Ungrouped", monitors: ungrouped });
+    out.push({
+      id: null,
+      name: "Ungrouped",
+      monitors: ungrouped,
+      stats: computeStats(ungrouped),
+    });
   }
   return out;
 });
@@ -96,34 +152,7 @@ onMounted(async () => {
   store.bindSocket();
 });
 
-const summary = computed(() => {
-  const up = store.monitors.filter((m) => m.stats?.status === 1).length;
-  const degraded = store.monitors.filter((m) => m.stats?.status === 2).length;
-  const down = store.monitors.filter((m) => m.stats?.status === 0).length;
-
-  const uptimes = store.monitors
-    .map((m) => m.stats?.uptime24h)
-    .filter((v): v is number => v != null);
-  const avgUptime = uptimes.length
-    ? uptimes.reduce((a, b) => a + b, 0) / uptimes.length
-    : null;
-
-  const pings = store.monitors
-    .map((m) => m.stats?.avgPing)
-    .filter((v): v is number => v != null);
-  const avgPing = pings.length
-    ? pings.reduce((a, b) => a + b, 0) / pings.length
-    : null;
-
-  return {
-    up,
-    degraded,
-    down,
-    total: store.monitors.length,
-    avgUptime,
-    avgPing,
-  };
-});
+const summary = computed(() => computeStats(store.monitors));
 
 function openNew() {
   editing.value = null;
@@ -210,48 +239,51 @@ async function showLogFiles(m: Monitor) {
     </div>
   </div>
 
-  <div v-if="tagStore.items.length" class="tag-filter">
-    <span class="muted">Filter:</span>
-    <button
-      v-for="t in tagStore.items"
-      :key="t.id"
-      type="button"
-      class="tag-chip"
-      :class="{ selected: activeTagIds.has(t.id) }"
-      :style="{
-        background: activeTagIds.has(t.id) ? t.color : 'transparent',
-        borderColor: t.color,
-        color: activeTagIds.has(t.id) ? '#fff' : t.color,
-      }"
-      @click="toggleTagFilter(t.id)"
-    >
-      {{ t.name }}
-    </button>
-    <button
-      v-if="activeTagIds.size"
-      type="button"
-      class="btn btn-sm"
-      @click="activeTagIds = new Set()"
-    >
-      Clear
-    </button>
-  </div>
-
   <div v-if="store.monitors.length === 0" class="empty">
     <p>No monitors yet.</p>
     <button class="btn btn-primary" @click="openNew">Add your first monitor</button>
   </div>
 
   <div v-else-if="sections.length === 0" class="empty">
-    <p>No monitors match the selected tags.</p>
+    <p>No monitors match the current filters.</p>
   </div>
 
   <div v-for="section in sections" :key="section.id ?? 'ungrouped'" class="monitor-section">
-    <div class="section-head">
+    <div
+      class="section-head"
+      role="button"
+      tabindex="0"
+      @click="toggleSection(section.id)"
+      @keydown.enter.prevent="toggleSection(section.id)"
+      @keydown.space.prevent="toggleSection(section.id)"
+    >
+      <span class="section-caret" :class="{ collapsed: collapsed.has(sectionKey(section.id)) }">▾</span>
       <h2>{{ section.name }}</h2>
       <span class="muted">{{ section.monitors.length }}</span>
+      <div class="section-stats">
+        <span class="section-stat" style="color: var(--up)" title="Up">
+          ● {{ section.stats.up }}
+        </span>
+        <span
+          v-if="section.stats.degraded"
+          class="section-stat"
+          style="color: var(--degraded)"
+          title="Degraded"
+        >
+          ● {{ section.stats.degraded }}
+        </span>
+        <span class="section-stat" style="color: var(--down)" title="Down">
+          ● {{ section.stats.down }}
+        </span>
+        <span class="section-stat muted" title="Average 24h uptime">
+          {{ uptimePct(section.stats.avgUptime) }} uptime
+        </span>
+        <span class="section-stat muted" title="Average latency">
+          {{ ms(section.stats.avgPing) }}
+        </span>
+      </div>
     </div>
-    <div class="monitor-grid">
+    <div v-if="!collapsed.has(sectionKey(section.id))" class="monitor-grid">
       <div v-for="m in section.monitors" :key="m.id" class="monitor-card">
         <div>
         <div class="monitor-top">
