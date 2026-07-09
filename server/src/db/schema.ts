@@ -56,7 +56,7 @@ export const heartbeats = sqliteTable("heartbeats", {
   monitorId: integer("monitor_id")
     .notNull()
     .references(() => monitors.id, { onDelete: "cascade" }),
-  // 1 = up, 0 = down
+  // 1 = up, 2 = degraded, 0 = down, 3 = maintenance
   status: integer("status").notNull(),
   message: text("message").notNull().default(""),
   // Round-trip time in milliseconds.
@@ -112,6 +112,59 @@ export const monitorTags = sqliteTable("monitor_tags", {
     .references(() => tags.id, { onDelete: "cascade" }),
 });
 
+// A maintenance window: suppresses checks (and thus notifications) for the
+// covered monitors while it is active. `strategy` selects how `startDate`/
+// `endDate`/`startTime`/`endTime`/`daysOfWeek`/`daysOfMonth` are interpreted:
+//   single  — one-off window: [startDate, endDate] are full unix datetimes.
+//   daily   — every day between startTime..endTime (minutes from local midnight),
+//             bounded by the optional [startDate, endDate] validity range.
+//   weekly  — like daily, but only on weekdays listed in daysOfWeek (0=Sun..6=Sat).
+//   monthly — like daily, but only on days listed in daysOfMonth (1..31).
+// All time-of-day math uses the server's local timezone.
+export const maintenances = sqliteTable("maintenances", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  title: text("title").notNull(),
+  description: text("description").notNull().default(""),
+  // "single" | "daily" | "weekly" | "monthly"
+  strategy: text("strategy").notNull().default("single"),
+  // Master switch: an inactive maintenance never suppresses anything.
+  active: integer("active", { mode: "boolean" }).notNull().default(true),
+  // Validity range (unix seconds). For "single" this IS the window; for the
+  // recurring strategies these are optional bounds (null = unbounded).
+  startDate: integer("start_date"),
+  endDate: integer("end_date"),
+  // Recurring daily time window, minutes from local midnight (null for single).
+  // endTime <= startTime means the window wraps past midnight.
+  startTime: integer("start_time"),
+  endTime: integer("end_time"),
+  // JSON arrays; daysOfWeek for "weekly" ([0..6]), daysOfMonth for "monthly".
+  daysOfWeek: text("days_of_week").notNull().default("[]"),
+  daysOfMonth: text("days_of_month").notNull().default("[]"),
+  createdAt: integer("created_at")
+    .notNull()
+    .default(sql`(unixepoch())`),
+});
+
+// Join table: monitors directly covered by a maintenance window.
+export const maintenanceMonitors = sqliteTable("maintenance_monitors", {
+  maintenanceId: integer("maintenance_id")
+    .notNull()
+    .references(() => maintenances.id, { onDelete: "cascade" }),
+  monitorId: integer("monitor_id")
+    .notNull()
+    .references(() => monitors.id, { onDelete: "cascade" }),
+});
+
+// Join table: groups covered by a maintenance window (covers all their monitors).
+export const maintenanceGroups = sqliteTable("maintenance_groups", {
+  maintenanceId: integer("maintenance_id")
+    .notNull()
+    .references(() => maintenances.id, { onDelete: "cascade" }),
+  groupId: integer("group_id")
+    .notNull()
+    .references(() => groups.id, { onDelete: "cascade" }),
+});
+
 export type Monitor = typeof monitors.$inferSelect;
 export type NewMonitor = typeof monitors.$inferInsert;
 export type Heartbeat = typeof heartbeats.$inferSelect;
@@ -119,3 +172,4 @@ export type Notification = typeof notifications.$inferSelect;
 export type User = typeof users.$inferSelect;
 export type Group = typeof groups.$inferSelect;
 export type Tag = typeof tags.$inferSelect;
+export type Maintenance = typeof maintenances.$inferSelect;

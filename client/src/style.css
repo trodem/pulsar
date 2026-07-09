@@ -9,6 +9,7 @@
   --down: #ef4444;
   --degraded: #f97316;
   --pending: #f59e0b;
+  --maintenance: #3b82f6;
   --accent: #38bdf8;
   --radius: 10px;
   color-scheme: dark;
@@ -371,6 +372,11 @@ select {
   color: var(--pending);
 }
 
+.status-maintenance {
+  background: rgba(59, 130, 246, 0.15);
+  color: var(--maintenance);
+}
+
 .monitor-name {
   font-weight: 600;
   font-size: 16px;
@@ -503,6 +509,10 @@ select {
 
 .hb.degraded {
   background: var(--degraded);
+}
+
+.hb.maintenance {
+  background: var(--maintenance);
 }
 
 /* Paused monitor: render the whole bar in a flat, muted gray. */

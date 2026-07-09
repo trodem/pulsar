@@ -112,7 +112,10 @@ const events = computed(() =>
         >
           {{ restartMsg.ok ? "✓" : "⚠" }} {{ restartMsg.text }}
         </span>
+        <!-- Remote Desktop temporarily hidden (pending IT review of the launch
+             mechanism): remove v-if="false" to re-enable. -->
         <button
+          v-if="false"
           class="btn"
           title="Open a Remote Desktop login to this host (needs the one-time pulsar-rdp setup)"
           @click="openRemoteDesktop(monitor)"
@@ -136,7 +139,7 @@ const events = computed(() =>
     <div class="stat-cards">
       <div class="stat-card">
         <div class="label">Current status</div>
-        <div class="big" :style="{ color: monitor.stats?.status === 1 ? 'var(--up)' : monitor.stats?.status === 2 ? 'var(--degraded)' : monitor.stats?.status === 0 ? 'var(--down)' : 'var(--pending)' }">
+        <div class="big" :style="{ color: monitor.stats?.status === 1 ? 'var(--up)' : monitor.stats?.status === 2 ? 'var(--degraded)' : monitor.stats?.status === 3 ? 'var(--maintenance)' : monitor.stats?.status === 0 ? 'var(--down)' : 'var(--pending)' }">
           {{ statusLabel(monitor.stats?.status).text }}
         </div>
       </div>

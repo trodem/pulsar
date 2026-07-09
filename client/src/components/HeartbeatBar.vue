@@ -22,6 +22,7 @@ const cells = computed(() => {
 function statusText(status: number): string {
   if (status === 1) return "Up";
   if (status === 2) return "Degraded";
+  if (status === 3) return "Maintenance";
   return "Down";
 }
 
@@ -41,6 +42,7 @@ function title(b: Heartbeat | null): string {
       :class="{
         up: !paused && b?.status === 1,
         degraded: !paused && b?.status === 2,
+        maintenance: !paused && b?.status === 3,
         down: !paused && b?.status === 0,
       }"
       :style="{ height: b ? '100%' : '55%' }"

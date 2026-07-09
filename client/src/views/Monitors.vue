@@ -57,6 +57,7 @@ const filteredMonitors = computed(() => {
 function computeStats(monitors: Monitor[]) {
   const up = monitors.filter((m) => m.stats?.status === 1).length;
   const degraded = monitors.filter((m) => m.stats?.status === 2).length;
+  const maintenance = monitors.filter((m) => m.stats?.status === 3).length;
   const down = monitors.filter((m) => m.stats?.status === 0).length;
   const paused = monitors.filter((m) => !m.active).length;
 
@@ -74,7 +75,7 @@ function computeStats(monitors: Monitor[]) {
     ? pings.reduce((a, b) => a + b, 0) / pings.length
     : null;
 
-  return { up, degraded, down, paused, total: monitors.length, avgUptime, avgPing };
+  return { up, degraded, maintenance, down, paused, total: monitors.length, avgUptime, avgPing };
 }
 
 // Monitors split into sections: one per group (in the group store's order),
@@ -319,6 +320,14 @@ async function showLogFiles(m: Monitor) {
         >
           ● {{ section.stats.degraded }}
         </span>
+        <span
+          v-if="section.stats.maintenance"
+          class="section-stat"
+          style="color: var(--maintenance)"
+          title="Maintenance"
+        >
+          ● {{ section.stats.maintenance }}
+        </span>
         <span class="section-stat" style="color: var(--down)" title="Down">
           ● {{ section.stats.down }}
         </span>
@@ -365,7 +374,10 @@ async function showLogFiles(m: Monitor) {
             >
               🌐 Open
             </button>
+            <!-- Remote Desktop temporarily hidden (pending IT review of the
+                 launch mechanism): remove v-if="false" to re-enable. -->
             <button
+              v-if="false"
               class="btn btn-sm"
               title="Open a Remote Desktop login to this host (needs the one-time pulsar-rdp setup)"
               @click="openRemoteDesktop(m)"

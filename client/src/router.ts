@@ -4,6 +4,7 @@ import Dashboard from "./views/Dashboard.vue";
 import Monitors from "./views/Monitors.vue";
 import MonitorDetail from "./views/MonitorDetail.vue";
 import Notifications from "./views/Notifications.vue";
+import Maintenance from "./views/Maintenance.vue";
 import Settings from "./views/Settings.vue";
 
 const router = createRouter({
@@ -14,6 +15,7 @@ const router = createRouter({
     { path: "/monitors", name: "monitors", component: Monitors },
     { path: "/monitor/:id", name: "monitor", component: MonitorDetail },
     { path: "/notifications", name: "notifications", component: Notifications },
+    { path: "/maintenance", name: "maintenance", component: Maintenance },
     { path: "/settings", name: "settings", component: Settings },
   ],
 });

@@ -70,3 +70,24 @@ export interface Notification {
   config: Record<string, any>;
   active: boolean;
 }
+
+export type MaintenanceStrategy = "single" | "daily" | "weekly" | "monthly";
+
+export interface Maintenance {
+  id: number;
+  title: string;
+  description: string;
+  strategy: MaintenanceStrategy;
+  active: boolean;
+  // Validity range (unix seconds). For "single" this is the whole window.
+  startDate: number | null;
+  endDate: number | null;
+  // Daily time window, minutes from midnight (recurring strategies).
+  startTime: number | null;
+  endTime: number | null;
+  daysOfWeek: number[]; // 0=Sun..6=Sat (weekly)
+  daysOfMonth: number[]; // 1..31 (monthly)
+  monitorIds: number[];
+  groupIds: number[];
+  createdAt: number;
+}

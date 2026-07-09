@@ -11,6 +11,7 @@ const store = useMonitorStore();
 function computeStats(monitors: Monitor[]) {
   const up = monitors.filter((m) => m.stats?.status === 1).length;
   const degraded = monitors.filter((m) => m.stats?.status === 2).length;
+  const maintenance = monitors.filter((m) => m.stats?.status === 3).length;
   const down = monitors.filter((m) => m.stats?.status === 0).length;
   const paused = monitors.filter((m) => !m.active).length;
 
@@ -28,7 +29,7 @@ function computeStats(monitors: Monitor[]) {
     ? pings.reduce((a, b) => a + b, 0) / pings.length
     : null;
 
-  return { up, degraded, down, paused, total: monitors.length, avgUptime, avgPing };
+  return { up, degraded, maintenance, down, paused, total: monitors.length, avgUptime, avgPing };
 }
 
 const summary = computed(() => computeStats(store.monitors));
@@ -56,6 +57,10 @@ onMounted(async () => {
     <div v-if="summary.degraded" class="stat-card">
       <span class="label">Degraded</span>
       <span class="big" style="color: var(--degraded)">{{ summary.degraded }}</span>
+    </div>
+    <div v-if="summary.maintenance" class="stat-card">
+      <span class="label">Maintenance</span>
+      <span class="big" style="color: var(--maintenance)">{{ summary.maintenance }}</span>
     </div>
     <div class="stat-card">
       <span class="label">Down</span>

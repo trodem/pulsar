@@ -93,6 +93,35 @@ export function initSchema(): void {
     );
     CREATE UNIQUE INDEX IF NOT EXISTS idx_monitor_tags
       ON monitor_tags (monitor_id, tag_id);
+
+    CREATE TABLE IF NOT EXISTS maintenances (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      title TEXT NOT NULL,
+      description TEXT NOT NULL DEFAULT '',
+      strategy TEXT NOT NULL DEFAULT 'single',
+      active INTEGER NOT NULL DEFAULT 1,
+      start_date INTEGER,
+      end_date INTEGER,
+      start_time INTEGER,
+      end_time INTEGER,
+      days_of_week TEXT NOT NULL DEFAULT '[]',
+      days_of_month TEXT NOT NULL DEFAULT '[]',
+      created_at INTEGER NOT NULL DEFAULT (unixepoch())
+    );
+
+    CREATE TABLE IF NOT EXISTS maintenance_monitors (
+      maintenance_id INTEGER NOT NULL REFERENCES maintenances(id) ON DELETE CASCADE,
+      monitor_id INTEGER NOT NULL REFERENCES monitors(id) ON DELETE CASCADE
+    );
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_maintenance_monitors
+      ON maintenance_monitors (maintenance_id, monitor_id);
+
+    CREATE TABLE IF NOT EXISTS maintenance_groups (
+      maintenance_id INTEGER NOT NULL REFERENCES maintenances(id) ON DELETE CASCADE,
+      group_id INTEGER NOT NULL REFERENCES groups(id) ON DELETE CASCADE
+    );
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_maintenance_groups
+      ON maintenance_groups (maintenance_id, group_id);
   `);
 
   // Migrate pre-existing databases whose monitors table predates the groups
