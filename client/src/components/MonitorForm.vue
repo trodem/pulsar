@@ -128,21 +128,6 @@ async function save() {
         </select>
       </div>
 
-      <div class="field-row" v-if="isHttp">
-        <div class="field">
-          <label>Method</label>
-          <select v-model="form.method">
-            <option>GET</option>
-            <option>HEAD</option>
-            <option>POST</option>
-          </select>
-        </div>
-        <div class="field">
-          <label>Accepted status codes</label>
-          <input v-model="form.acceptedStatus" placeholder="200-299" />
-        </div>
-      </div>
-
       <div class="field-row">
         <div class="field">
           <label>Interval (s)</label>
@@ -198,8 +183,11 @@ async function save() {
       </div>
 
       <div class="checkbox-row field">
-        <input type="checkbox" v-model="form.active" id="active" />
-        <label for="active" style="margin: 0">Active</label>
+        <label class="switch">
+          <input type="checkbox" v-model="form.active" />
+          <span class="switch-track"><span class="switch-thumb"></span></span>
+        </label>
+        <label style="margin: 0">Active</label>
       </div>
 
       <div class="modal-actions">

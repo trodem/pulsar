@@ -324,13 +324,15 @@ const groups = computed(() => groupStore.items);
 
       <!-- One-off window -->
       <template v-if="form.strategy === 'single'">
-        <div class="field">
-          <label>Start</label>
-          <input type="datetime-local" v-model="form.singleStart" />
-        </div>
-        <div class="field">
-          <label>End</label>
-          <input type="datetime-local" v-model="form.singleEnd" />
+        <div class="field-row">
+          <div class="field">
+            <label>Start</label>
+            <input type="datetime-local" v-model="form.singleStart" />
+          </div>
+          <div class="field">
+            <label>End</label>
+            <input type="datetime-local" v-model="form.singleEnd" />
+          </div>
         </div>
       </template>
 
@@ -426,8 +428,11 @@ const groups = computed(() => groupStore.items);
       </div>
 
       <div class="checkbox-row field">
-        <input type="checkbox" v-model="form.active" id="m-active" />
-        <label for="m-active" style="margin: 0">Active</label>
+        <label class="switch">
+          <input type="checkbox" v-model="form.active" />
+          <span class="switch-track"><span class="switch-thumb"></span></span>
+        </label>
+        <label style="margin: 0">Active</label>
       </div>
 
       <div class="modal-actions">
@@ -591,9 +596,9 @@ const groups = computed(() => groupStore.items);
   border: 1px solid var(--border);
   border-radius: 8px;
   padding: 6px 10px;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 4px 12px;
 }
 .pick-row {
   display: flex;
