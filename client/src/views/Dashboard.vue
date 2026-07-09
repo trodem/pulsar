@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from "vue";
+import { computed, onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
 import { useMonitorStore } from "../stores/monitors";
 import { useGroupStore } from "../stores/groups";
@@ -35,6 +35,29 @@ function toggleSection(id: number | null) {
   localStorage.setItem(COLLAPSED_KEY, JSON.stringify([...next]));
 }
 
+// Height-based expand/collapse transition for a group's monitor grid. The grid
+// has an unknown height, so we animate from/to its measured scrollHeight and
+// clear the inline height afterwards to let it reflow naturally.
+function onSectionEnter(el: Element) {
+  const e = el as HTMLElement;
+  e.style.height = "0";
+  e.style.overflow = "hidden";
+  void e.offsetHeight; // force reflow so the transition picks up the change
+  e.style.height = `${e.scrollHeight}px`;
+}
+function onSectionAfterEnter(el: Element) {
+  const e = el as HTMLElement;
+  e.style.height = "";
+  e.style.overflow = "";
+}
+function onSectionLeave(el: Element) {
+  const e = el as HTMLElement;
+  e.style.height = `${e.scrollHeight}px`;
+  e.style.overflow = "hidden";
+  void e.offsetHeight;
+  e.style.height = "0";
+}
+
 // Search text and tag filter both live in the global toolbar and are shared
 // through the UI store. A monitor must match both. Empty filter = no filter.
 const filteredMonitors = computed(() => {
@@ -59,6 +82,7 @@ function computeStats(monitors: Monitor[]) {
   const up = monitors.filter((m) => m.stats?.status === 1).length;
   const degraded = monitors.filter((m) => m.stats?.status === 2).length;
   const down = monitors.filter((m) => m.stats?.status === 0).length;
+  const paused = monitors.filter((m) => !m.active).length;
 
   const uptimes = monitors
     .map((m) => m.stats?.uptime24h)
@@ -74,7 +98,7 @@ function computeStats(monitors: Monitor[]) {
     ? pings.reduce((a, b) => a + b, 0) / pings.length
     : null;
 
-  return { up, degraded, down, total: monitors.length, avgUptime, avgPing };
+  return { up, degraded, down, paused, total: monitors.length, avgUptime, avgPing };
 }
 
 // Monitors split into dashboard sections: one per group (in the group store's
@@ -104,12 +128,6 @@ const sections = computed(() => {
   }
   return out;
 });
-
-// The global toolbar's "+ New monitor" button opens this page's form.
-watch(
-  () => ui.newMonitorRequests,
-  () => openNew(),
-);
 
 const showForm = ref(false);
 const editing = ref<Monitor | null>(null);
@@ -203,39 +221,58 @@ async function showLogFiles(m: Monitor) {
 
 <template>
   <div class="page-head">
-    <div>
-      <h1>Dashboard</h1>
-      <div class="muted">
-        {{ summary.total }} monitors · {{ summary.up }} up ·
-        <template v-if="summary.degraded">{{ summary.degraded }} degraded · </template>{{ summary.down }} down
+    <h1>Dashboard</h1>
+    <div class="page-actions">
+      <div class="search-box">
+        <span class="search-icon">🔍</span>
+        <input
+          v-model="ui.monitorSearch"
+          type="text"
+          class="search-input"
+          placeholder="Search monitors by name, URL or tag…"
+        />
+        <button
+          v-if="ui.monitorSearch"
+          type="button"
+          class="search-clear"
+          title="Clear search"
+          @click="ui.monitorSearch = ''"
+        >
+          ✕
+        </button>
       </div>
+      <button class="btn btn-primary btn-sm" @click="openNew">+ New monitor</button>
     </div>
   </div>
 
   <div v-if="store.monitors.length > 0" class="stat-cards">
     <div class="stat-card">
-      <div class="label">Monitors</div>
-      <div class="big">{{ summary.total }}</div>
+      <span class="label">Monitors</span>
+      <span class="big">{{ summary.total }}</span>
     </div>
     <div class="stat-card">
-      <div class="label">Up</div>
-      <div class="big" style="color: var(--up)">{{ summary.up }}</div>
+      <span class="label">Up</span>
+      <span class="big" style="color: var(--up)">{{ summary.up }}</span>
     </div>
     <div v-if="summary.degraded" class="stat-card">
-      <div class="label">Degraded</div>
-      <div class="big" style="color: var(--degraded)">{{ summary.degraded }}</div>
+      <span class="label">Degraded</span>
+      <span class="big" style="color: var(--degraded)">{{ summary.degraded }}</span>
     </div>
     <div class="stat-card">
-      <div class="label">Down</div>
-      <div class="big" style="color: var(--down)">{{ summary.down }}</div>
+      <span class="label">Down</span>
+      <span class="big" style="color: var(--down)">{{ summary.down }}</span>
+    </div>
+    <div v-if="summary.paused" class="stat-card">
+      <span class="label">Paused</span>
+      <span class="big" style="color: var(--text-dim)">{{ summary.paused }}</span>
     </div>
     <div class="stat-card">
-      <div class="label">Avg 24h uptime</div>
-      <div class="big">{{ uptimePct(summary.avgUptime) }}</div>
+      <span class="label">Avg 24h uptime</span>
+      <span class="big">{{ uptimePct(summary.avgUptime) }}</span>
     </div>
     <div class="stat-card">
-      <div class="label">Avg latency</div>
-      <div class="big">{{ ms(summary.avgPing) }}</div>
+      <span class="label">Avg latency</span>
+      <span class="big">{{ ms(summary.avgPing) }}</span>
     </div>
   </div>
 
@@ -283,31 +320,70 @@ async function showLogFiles(m: Monitor) {
         </span>
       </div>
     </div>
+    <Transition
+      name="section-expand"
+      @enter="onSectionEnter"
+      @after-enter="onSectionAfterEnter"
+      @leave="onSectionLeave"
+    >
     <div v-if="!collapsed.has(sectionKey(section.id))" class="monitor-grid">
       <div v-for="m in section.monitors" :key="m.id" class="monitor-card">
-        <div>
-        <div class="monitor-top">
-          <span class="status-pill" :class="statusLabel(m.stats?.status).cls">
-            {{ statusLabel(m.stats?.status).text }}
-          </span>
-          <router-link :to="`/monitor/${m.id}`" class="monitor-name">
-            {{ m.name }}
-          </router-link>
-          <span class="type-tag">{{ m.type }}</span>
-          <span v-if="!m.active" class="muted">(paused)</span>
+        <div class="monitor-card-header">
+          <div class="header-left">
+            <span class="status-pill" :class="statusLabel(m.stats?.status).cls">
+              {{ statusLabel(m.stats?.status).text }}
+            </span>
+            <router-link :to="`/monitor/${m.id}`" class="monitor-name">
+              {{ m.name }}
+            </router-link>
+            <span class="type-tag">{{ m.type }}</span>
+            <span v-if="!m.active" class="paused-badge">paused</span>
+            <span
+              v-for="t in m.tags ?? []"
+              :key="t.id"
+              class="tag-badge"
+              :style="{ background: t.color, borderColor: t.color }"
+            >
+              {{ t.name }}
+            </span>
+          </div>
+          <div class="header-right monitor-actions">
+            <button
+              v-if="m.type === 'http' || m.type === 'http-ping'"
+              class="btn btn-sm"
+              title="Open the monitored URL in a new tab"
+              @click="openWebPage(m)"
+            >
+              🌐 Open
+            </button>
+            <button
+              v-if="m.type === 'http-ping'"
+              class="btn btn-sm"
+              title="Read the full remote log now and refresh the logged-in users"
+              :disabled="checkingUsers.has(m.id)"
+              @click="checkUsers(m)"
+            >
+              {{ checkingUsers.has(m.id) ? "⏳ Checking…" : "👥 Check users" }}
+            </button>
+            <button
+              v-if="m.type === 'http-ping'"
+              class="btn btn-sm"
+              title="Show the files in the remote log folder"
+              @click="showLogFiles(m)"
+            >
+              📁 Log files
+            </button>
+            <button class="btn btn-sm" @click="store.toggle(m.id)">
+              {{ m.active ? "Pause" : "Resume" }}
+            </button>
+            <button class="btn btn-sm" @click="openEdit(m)">Edit</button>
+            <button class="btn btn-sm btn-danger" @click="remove(m)">Delete</button>
+          </div>
         </div>
+        <div class="monitor-card-body">
+        <div>
         <div class="monitor-target">
           {{ m.target }}<span v-if="m.port">:{{ m.port }}</span>
-        </div>
-        <div v-if="m.tags?.length" class="monitor-tags">
-          <span
-            v-for="t in m.tags"
-            :key="t.id"
-            class="tag-chip readonly"
-            :style="{ background: t.color, borderColor: t.color }"
-          >
-            {{ t.name }}
-          </span>
         </div>
         <div v-if="m.users?.length" class="monitor-users">
           <span class="label">Users:</span>
@@ -324,7 +400,7 @@ async function showLogFiles(m: Monitor) {
           ⚠ Users: {{ m.usersError }}
         </div>
         <div style="margin-top: 12px">
-          <HeartbeatBar :beats="m.heartbeats ?? []" />
+          <HeartbeatBar :beats="m.heartbeats ?? []" :paused="!m.active" />
         </div>
       </div>
 
@@ -345,41 +421,11 @@ async function showLogFiles(m: Monitor) {
             </div>
           </div>
         </div>
-        <div class="monitor-actions">
-          <button
-            v-if="m.type === 'http' || m.type === 'http-ping'"
-            class="btn btn-sm"
-            title="Open the monitored URL in a new tab"
-            @click="openWebPage(m)"
-          >
-            🌐 Open
-          </button>
-          <button
-            v-if="m.type === 'http-ping'"
-            class="btn btn-sm"
-            title="Read the full remote log now and refresh the logged-in users"
-            :disabled="checkingUsers.has(m.id)"
-            @click="checkUsers(m)"
-          >
-            {{ checkingUsers.has(m.id) ? "⏳ Checking…" : "👥 Check users" }}
-          </button>
-          <button
-            v-if="m.type === 'http-ping'"
-            class="btn btn-sm"
-            title="Show the files in the remote log folder"
-            @click="showLogFiles(m)"
-          >
-            📁 Log files
-          </button>
-          <button class="btn btn-sm" @click="store.toggle(m.id)">
-            {{ m.active ? "Pause" : "Resume" }}
-          </button>
-          <button class="btn btn-sm" @click="openEdit(m)">Edit</button>
-          <button class="btn btn-sm btn-danger" @click="remove(m)">Delete</button>
-        </div>
+      </div>
       </div>
       </div>
     </div>
+    </Transition>
   </div>
 
   <MonitorForm

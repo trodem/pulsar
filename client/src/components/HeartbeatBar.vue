@@ -2,7 +2,11 @@
 import { computed } from "vue";
 import type { Heartbeat } from "../types";
 
-const props = defineProps<{ beats: Heartbeat[]; slots?: number }>();
+const props = defineProps<{
+  beats: Heartbeat[];
+  slots?: number;
+  paused?: boolean;
+}>();
 
 // Pad with empty placeholders so the bar keeps a stable width.
 const cells = computed(() => {
@@ -29,14 +33,18 @@ function title(b: Heartbeat | null): string {
 </script>
 
 <template>
-  <div class="heartbeat-bar">
+  <div class="heartbeat-bar" :class="{ paused }">
     <div
       v-for="(b, i) in cells"
       :key="i"
       class="hb"
-      :class="{ up: b?.status === 1, degraded: b?.status === 2, down: b?.status === 0 }"
+      :class="{
+        up: !paused && b?.status === 1,
+        degraded: !paused && b?.status === 2,
+        down: !paused && b?.status === 0,
+      }"
       :style="{ height: b ? '100%' : '55%' }"
-      :title="title(b)"
+      :title="paused ? 'Paused' : title(b)"
     ></div>
   </div>
 </template>

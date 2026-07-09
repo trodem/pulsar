@@ -1,38 +1,13 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from "vue";
+import { computed, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useAuthStore } from "./stores/auth";
-import { useMonitorStore } from "./stores/monitors";
-import { useTagStore } from "./stores/tags";
-import { useUiStore } from "./stores/ui";
 
 const route = useRoute();
 const router = useRouter();
 const auth = useAuthStore();
-const monitors = useMonitorStore();
-const tags = useTagStore();
-const ui = useUiStore();
 
 const showShell = computed(() => route.name !== "login");
-
-// The tag-filter dropdown in the toolbar.
-const tagMenuOpen = ref(false);
-const activeTagCount = computed(() => ui.activeTagIds.size);
-
-// Load tags so the toolbar filter is available on every page, not just after
-// the Dashboard has fetched them.
-onMounted(() => {
-  if (auth.token) tags.fetchAll().catch(() => {});
-});
-
-async function newMonitor() {
-  if (route.name !== "dashboard") await router.push("/");
-  ui.requestNewMonitor();
-}
-
-async function refreshAll() {
-  await monitors.fetchAll();
-}
 
 const collapsed = ref(localStorage.getItem("sidebarCollapsed") === "1");
 watch(collapsed, (v) => localStorage.setItem("sidebarCollapsed", v ? "1" : "0"));
@@ -55,77 +30,6 @@ function logout() {
         <button class="btn btn-sm" @click="logout">Log out</button>
       </div>
     </header>
-
-    <div class="app-toolbar">
-      <button class="btn btn-primary btn-sm" @click="newMonitor">+ New monitor</button>
-      <button
-        class="btn btn-sm"
-        :disabled="monitors.loading"
-        @click="refreshAll"
-      >
-        {{ monitors.loading ? "⏳ Refreshing…" : "↻ Refresh" }}
-      </button>
-
-      <div v-if="tags.items.length" class="tag-filter-dd">
-        <button
-          type="button"
-          class="btn btn-sm"
-          :class="{ active: activeTagCount > 0 }"
-          @click="tagMenuOpen = !tagMenuOpen"
-        >
-          🏷 Tags
-          <span v-if="activeTagCount" class="filter-badge">{{ activeTagCount }}</span>
-          <span class="caret">▾</span>
-        </button>
-        <template v-if="tagMenuOpen">
-          <div class="tag-menu-backdrop" @click="tagMenuOpen = false"></div>
-          <div class="tag-menu">
-            <button
-              v-for="t in tags.items"
-              :key="t.id"
-              type="button"
-              class="tag-chip"
-              :class="{ selected: ui.activeTagIds.has(t.id) }"
-              :style="{
-                background: ui.activeTagIds.has(t.id) ? t.color : 'transparent',
-                borderColor: t.color,
-                color: ui.activeTagIds.has(t.id) ? '#fff' : t.color,
-              }"
-              @click="ui.toggleTagFilter(t.id)"
-            >
-              {{ t.name }}
-            </button>
-            <button
-              v-if="activeTagCount"
-              type="button"
-              class="btn btn-sm tag-menu-clear"
-              @click="ui.clearTagFilter()"
-            >
-              Clear filter
-            </button>
-          </div>
-        </template>
-      </div>
-
-      <div class="search-box">
-        <span class="search-icon">🔍</span>
-        <input
-          v-model="ui.monitorSearch"
-          type="text"
-          class="search-input"
-          placeholder="Search monitors by name, URL or tag…"
-        />
-        <button
-          v-if="ui.monitorSearch"
-          type="button"
-          class="search-clear"
-          title="Clear search"
-          @click="ui.monitorSearch = ''"
-        >
-          ✕
-        </button>
-      </div>
-    </div>
 
     <div class="app-body">
       <aside class="sidebar" :class="{ collapsed }">
