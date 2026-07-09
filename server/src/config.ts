@@ -36,11 +36,6 @@ export const config = {
   // User may be "DOMAIN\\user", "user@domain" or a plain username.
   stapLogUser: process.env.STAP_LOG_USER || "",
   stapLogPassword: process.env.STAP_LOG_PASSWORD || "",
-  // How often to re-read the remote log (seconds).
-  stapPollSeconds: Number(process.env.STAP_POLL_SECONDS || 15),
-  // Only read the last N bytes of the log, to bound work and bias to recent
-  // activity (the file rotates but can still be large).
-  stapTailBytes: Number(process.env.STAP_TAIL_BYTES || 65536),
   // Force on/off with STAP_LOG_ENABLED=true|false; default on.
   stapEnabled: process.env.STAP_LOG_ENABLED
     ? process.env.STAP_LOG_ENABLED === "true"

@@ -1,9 +1,8 @@
 import { execFile } from "node:child_process";
-import { open, readdir, stat } from "node:fs/promises";
+import { readFile, readdir, stat } from "node:fs/promises";
 import { promisify } from "node:util";
 import { config } from "../config.js";
-import { db } from "../db/index.js";
-import { monitors, type Monitor } from "../db/schema.js";
+import { type Monitor } from "../db/schema.js";
 import { bus } from "../events.js";
 
 const execFileAsync = promisify(execFile);
@@ -16,19 +15,19 @@ const execFileAsync = promisify(execFile);
 const LOGIN_RE = /Teskernel\s+Prozess\s+wird\s+gestartet!\s+User:\s+(\S+)/;
 const LOGOUT_RE = /User\s+Logout:\s+(\S+)/;
 
-// Per-monitor extraction state.
+// Per-monitor extraction state (last manual check result, for the API/cards).
 const usersByMonitor = new Map<number, string[]>();
 // monitorId -> human-readable error while reading the log (null when healthy).
 const errorByMonitor = new Map<number, string | null>();
-// monitorIds currently failing to read (so we log to console only on change).
-const failing = new Set<number>();
 // Hosts for which an authenticated SMB session is already established.
 const connectedHosts = new Set<string>();
-let timer: NodeJS.Timeout | null = null;
 
-/** Users last read from the given monitor's remote log (empty if none/unknown). */
-export function getStapUsers(monitorId: number): string[] {
-  return usersByMonitor.get(monitorId) ?? [];
+/**
+ * Users from the monitor's last manual check, or undefined if it was never
+ * checked. An empty array means "checked, nobody logged in".
+ */
+export function getStapUsers(monitorId: number): string[] | undefined {
+  return usersByMonitor.get(monitorId);
 }
 
 /** Last error reading the monitor's log, or null if the last read succeeded. */
@@ -177,20 +176,10 @@ async function ensureConnection(host: string): Promise<void> {
   }
 }
 
-// Reads only the last `maxBytes` of the file (the log rotates but can be large).
-async function readTail(path: string, maxBytes: number): Promise<string> {
-  const fh = await open(path, "r");
-  try {
-    const { size } = await fh.stat();
-    const start = size > maxBytes ? size - maxBytes : 0;
-    const length = size - start;
-    if (length === 0) return "";
-    const buf = Buffer.alloc(length);
-    await fh.read(buf, 0, length, start);
-    return buf.toString("utf8");
-  } finally {
-    await fh.close();
-  }
+// Reads the whole log file. The check is manual (on demand), so we scan the
+// entire file to catch logins that happened long before the current session.
+async function readFull(path: string): Promise<string> {
+  return readFile(path, "utf8");
 }
 
 // Replays the log chronologically, tracking each user's latest event. Returns
@@ -217,56 +206,35 @@ function sameUsers(a: string[], b: string[]): boolean {
   return a.length === b.length && a.every((x, i) => x === b[i]);
 }
 
-async function pollMonitor(m: Monitor): Promise<void> {
+/**
+ * Reads the monitor's entire remote log now, extracts the currently logged-in
+ * users, caches + broadcasts the snapshot (so every client updates), and
+ * returns the result. Triggered on demand by the "Check users" button.
+ */
+export async function checkMonitorUsers(
+  m: Monitor,
+): Promise<{ users: string[]; error: string | null }> {
+  if (!config.stapEnabled) {
+    return { users: [], error: "User check is disabled (STAP_LOG_ENABLED=false)" };
+  }
   const host = hostFromTarget(m.target);
   if (!host) {
     publish(m.id, [], "Invalid monitor URL");
-    return;
+    return { users: [], error: "Invalid monitor URL" };
   }
   const path = logPathFor(host);
   try {
     await ensureConnection(host);
-    const text = await readTail(path, config.stapTailBytes);
-    publish(m.id, extractUsers(text), null);
-    if (failing.delete(m.id)) {
-      console.log(`[stap] #${m.id} (${host}) log readable again`);
-    }
+    const text = await readFull(path);
+    const users = extractUsers(text);
+    publish(m.id, users, null);
+    return { users, error: null };
   } catch (err) {
-    // Drop the cached session so the next tick re-authenticates.
+    // Drop the cached session so the next check re-authenticates.
     connectedHosts.delete(host);
     // Surface the error on the card and clear any stale user list.
     const reason = describeError(err, path);
     publish(m.id, [], reason);
-    if (!failing.has(m.id)) {
-      failing.add(m.id);
-      console.warn(`[stap] #${m.id} ${reason}: ${path}`);
-    }
+    return { users: [], error: reason };
   }
-}
-
-function tick(): void {
-  const all = db.select().from(monitors).all();
-  for (const m of all) {
-    if (m.active && isStapMonitor(m)) void pollMonitor(m);
-  }
-}
-
-/** Starts polling remote STAP logs. No-op if disabled. */
-export function startStapUsers(): void {
-  if (!config.stapEnabled) {
-    console.log("[stap] disabled (STAP_LOG_ENABLED=false)");
-    return;
-  }
-  console.log(
-    `[stap] reading remote logs every ${config.stapPollSeconds}s ` +
-      `for http-ping monitors`,
-  );
-  tick();
-  timer = setInterval(tick, config.stapPollSeconds * 1000);
-}
-
-/** Stops polling (for shutdown/tests). */
-export function stopStapUsers(): void {
-  if (timer) clearInterval(timer);
-  timer = null;
 }

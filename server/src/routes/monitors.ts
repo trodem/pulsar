@@ -6,6 +6,7 @@ import { monitorNotifications, monitors } from "../db/schema.js";
 import { monitorStats, recentHeartbeats } from "../monitors/stats.js";
 import { reschedule, unschedule } from "../monitors/scheduler.js";
 import {
+  checkMonitorUsers,
   getStapError,
   getStapUsers,
   isStapMonitor,
@@ -150,6 +151,23 @@ router.patch("/:id/toggle", (req, res) => {
     .all();
   reschedule(id);
   res.json(updated);
+});
+
+// Reads the monitor's full remote log now and returns the logged-in users.
+// Triggered manually by the "Check users" button (there is no background poll).
+router.post("/:id/check-users", async (req, res) => {
+  const id = Number(req.params.id);
+  const monitor = db.select().from(monitors).where(eq(monitors.id, id)).get();
+  if (!monitor) {
+    res.status(404).json({ error: "Monitor not found" });
+    return;
+  }
+  if (!isStapMonitor(monitor)) {
+    res.status(400).json({ error: "Only http-ping monitors have users" });
+    return;
+  }
+  const { users, error } = await checkMonitorUsers(monitor);
+  res.json({ users, error });
 });
 
 // Lists the files inside the monitor's remote log folder (for the modal).

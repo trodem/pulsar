@@ -12,7 +12,6 @@ import monitorRoutes from "./routes/monitors.js";
 import notificationRoutes from "./routes/notifications.js";
 import { initSocket } from "./socket.js";
 import { startScheduler } from "./monitors/scheduler.js";
-import { startStapUsers } from "./monitors/stap-users.js";
 
 initSchema();
 
@@ -43,5 +42,4 @@ initSocket(httpServer);
 httpServer.listen(config.port, () => {
   console.log(`[server] API + WS listening on http://localhost:${config.port}`);
   startScheduler();
-  startStapUsers();
 });

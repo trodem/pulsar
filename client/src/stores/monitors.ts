@@ -44,6 +44,21 @@ export const useMonitorStore = defineStore("monitors", () => {
     monitors.value = monitors.value.filter((m) => m.id !== id);
   }
 
+  // Reads the monitor's full remote log now and updates its logged-in users.
+  async function checkUsers(
+    id: number,
+  ): Promise<{ users: string[]; error: string | null }> {
+    const { data } = await api.post<{ users: string[]; error: string | null }>(
+      `/monitors/${id}/check-users`,
+    );
+    const m = monitors.value.find((x) => x.id === id);
+    if (m) {
+      m.users = data.users;
+      m.usersError = data.error;
+    }
+    return data;
+  }
+
   // Lists the files in the monitor's remote log folder (for the modal).
   async function logFiles(
     id: number,
@@ -104,6 +119,7 @@ export const useMonitorStore = defineStore("monitors", () => {
     update,
     toggle,
     remove,
+    checkUsers,
     logFiles,
     bindSocket,
   };

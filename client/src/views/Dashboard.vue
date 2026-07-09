@@ -22,6 +22,26 @@ interface LogModal {
 }
 const logModal = ref<LogModal | null>(null);
 
+// Monitor ids whose remote log is currently being read (button spinner state).
+const checkingUsers = ref<Set<number>>(new Set());
+
+async function checkUsers(m: Monitor) {
+  checkingUsers.value = new Set(checkingUsers.value).add(m.id);
+  try {
+    await store.checkUsers(m.id);
+  } catch (e: any) {
+    const target = store.monitors.find((x) => x.id === m.id);
+    if (target) {
+      target.usersError =
+        e?.response?.data?.error ?? "Could not read the remote log.";
+    }
+  } finally {
+    const next = new Set(checkingUsers.value);
+    next.delete(m.id);
+    checkingUsers.value = next;
+  }
+}
+
 onMounted(async () => {
   await store.fetchAll();
   store.bindSocket();
@@ -167,6 +187,13 @@ async function showLogFiles(m: Monitor) {
           <span class="label">Users:</span>
           <span v-for="u in m.users" :key="u" class="user-chip">{{ u }}</span>
         </div>
+        <div
+          v-else-if="m.users && !m.usersError"
+          class="monitor-users"
+        >
+          <span class="label">Users:</span>
+          <span class="muted">No users</span>
+        </div>
         <div v-if="m.usersError" class="monitor-users-error" :title="m.usersError">
           ⚠ Users: {{ m.usersError }}
         </div>
@@ -200,6 +227,15 @@ async function showLogFiles(m: Monitor) {
             @click="openWebPage(m)"
           >
             🌐 Open
+          </button>
+          <button
+            v-if="m.type === 'http-ping'"
+            class="btn btn-sm"
+            title="Read the full remote log now and refresh the logged-in users"
+            :disabled="checkingUsers.has(m.id)"
+            @click="checkUsers(m)"
+          >
+            {{ checkingUsers.has(m.id) ? "⏳ Checking…" : "👥 Check users" }}
           </button>
           <button
             v-if="m.type === 'http-ping'"
