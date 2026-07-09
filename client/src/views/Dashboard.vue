@@ -35,29 +35,6 @@ function toggleSection(id: number | null) {
   localStorage.setItem(COLLAPSED_KEY, JSON.stringify([...next]));
 }
 
-// Height-based expand/collapse transition for a group's monitor grid. The grid
-// has an unknown height, so we animate from/to its measured scrollHeight and
-// clear the inline height afterwards to let it reflow naturally.
-function onSectionEnter(el: Element) {
-  const e = el as HTMLElement;
-  e.style.height = "0";
-  e.style.overflow = "hidden";
-  void e.offsetHeight; // force reflow so the transition picks up the change
-  e.style.height = `${e.scrollHeight}px`;
-}
-function onSectionAfterEnter(el: Element) {
-  const e = el as HTMLElement;
-  e.style.height = "";
-  e.style.overflow = "";
-}
-function onSectionLeave(el: Element) {
-  const e = el as HTMLElement;
-  e.style.height = `${e.scrollHeight}px`;
-  e.style.overflow = "hidden";
-  void e.offsetHeight;
-  e.style.height = "0";
-}
-
 // Search text and tag filter both live in the global toolbar and are shared
 // through the UI store. A monitor must match both. Empty filter = no filter.
 const filteredMonitors = computed(() => {
@@ -320,13 +297,12 @@ async function showLogFiles(m: Monitor) {
         </span>
       </div>
     </div>
-    <Transition
-      name="section-expand"
-      @enter="onSectionEnter"
-      @after-enter="onSectionAfterEnter"
-      @leave="onSectionLeave"
+    <div
+      class="section-collapsible"
+      :class="{ collapsed: collapsed.has(sectionKey(section.id)) }"
     >
-    <div v-if="!collapsed.has(sectionKey(section.id))" class="monitor-grid">
+    <div class="section-collapsible-inner">
+    <div class="monitor-grid">
       <div v-for="m in section.monitors" :key="m.id" class="monitor-card">
         <div class="monitor-card-header">
           <div class="header-left">
@@ -425,7 +401,8 @@ async function showLogFiles(m: Monitor) {
       </div>
       </div>
     </div>
-    </Transition>
+    </div>
+    </div>
   </div>
 
   <MonitorForm

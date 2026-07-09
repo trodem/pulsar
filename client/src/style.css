@@ -248,16 +248,20 @@ select {
   gap: 12px;
 }
 
-/* Expand/collapse animation for a group's monitor grid. Height is driven by JS
-   hooks (measured scrollHeight); opacity fades the content in and out. */
-.section-expand-enter-active,
-.section-expand-leave-active {
-  transition: height 0.25s ease, opacity 0.25s ease;
-  overflow: hidden;
+/* Expand/collapse animation for a group's monitor grid. Animating the grid row
+   from 1fr to 0fr gives a smooth height collapse with no JS measuring and no
+   end-of-transition snap; the inner wrapper clips the content as it slides. */
+.section-collapsible {
+  display: grid;
+  grid-template-rows: 1fr;
+  transition: grid-template-rows 0.28s ease;
 }
-.section-expand-enter-from,
-.section-expand-leave-to {
-  opacity: 0;
+.section-collapsible.collapsed {
+  grid-template-rows: 0fr;
+}
+.section-collapsible-inner {
+  min-height: 0;
+  overflow: hidden;
 }
 
 .monitor-card {
