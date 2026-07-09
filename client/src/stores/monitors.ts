@@ -59,6 +59,17 @@ export const useMonitorStore = defineStore("monitors", () => {
     return data;
   }
 
+  // Stops and restarts the remote STAP backend executable for this monitor
+  // (or just starts it if it was not running).
+  async function restartProgram(
+    id: number,
+  ): Promise<{ ok: boolean; message: string }> {
+    const { data } = await api.post<{ ok: boolean; message: string }>(
+      `/monitors/${id}/restart-program`,
+    );
+    return data;
+  }
+
   // Lists the files in the monitor's remote log folder (for the modal).
   async function logFiles(
     id: number,
@@ -120,6 +131,7 @@ export const useMonitorStore = defineStore("monitors", () => {
     toggle,
     remove,
     checkUsers,
+    restartProgram,
     logFiles,
     bindSocket,
   };

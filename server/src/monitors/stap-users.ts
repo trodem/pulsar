@@ -76,7 +76,7 @@ export function isStapMonitor(m: { type: string }): boolean {
 }
 
 /** Extracts the hostname from a monitor target ("http://host:8080" or "host"). */
-function hostFromTarget(target: string): string | null {
+export function hostFromTarget(target: string): string | null {
   try {
     return new URL(target).hostname || null;
   } catch {

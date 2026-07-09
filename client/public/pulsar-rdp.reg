@@ -1,0 +1,18 @@
+Windows Registry Editor Version 5.00
+
+; Pulsar "one-click" Remote Desktop.
+; Registers the pulsar-rdp: URL protocol for the CURRENT USER (no admin needed).
+; After importing this file once, clicking the "Remote Desktop" button in Pulsar
+; opens Windows Remote Desktop (mstsc) straight to the host and prompts for the
+; login. The button navigates to  pulsar-rdp:<hostname>  and the command below
+; strips the scheme and runs  mstsc /v:<hostname>.
+;
+; To install: double-click this file and confirm. To remove: delete the
+; HKEY_CURRENT_USER\Software\Classes\pulsar-rdp key.
+
+[HKEY_CURRENT_USER\Software\Classes\pulsar-rdp]
+@="URL:Pulsar Remote Desktop"
+"URL Protocol"=""
+
+[HKEY_CURRENT_USER\Software\Classes\pulsar-rdp\shell\open\command]
+@="\"C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe\" -NoProfile -WindowStyle Hidden -Command \"$h = '%1' -replace '(?i)^pulsar-rdp:','' -replace '/+$',''; if ($h) { Start-Process mstsc -ArgumentList ('/v:' + $h) }\""

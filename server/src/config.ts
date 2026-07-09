@@ -17,6 +17,11 @@ const rawOrigin = process.env.CLIENT_ORIGIN || "http://localhost:5173";
 const DEFAULT_STAP_LOG_UNC =
   "\\\\{host}\\C$\\Users\\stibs\\AppData\\Roaming\\stibs\\portable\\base\\module\\logging\\log_backend_0.log";
 
+// Local path (on the remote host) of the STAP backend executable that the
+// "Restart" card button stops and starts again via WMI. Overridable in .env.
+const DEFAULT_STAP_EXE_PATH =
+  "C:\\Users\\stibs\\AppData\\Roaming\\stibs\\portable\\base\\module\\backend\\STAP_Stibs2.exe";
+
 export const config = {
   port: Number(process.env.PORT || 3021),
   // "*" reflects any origin (single-origin self-hosted / Docker deploy);
@@ -31,6 +36,8 @@ export const config = {
 
   // STAP logged-user extraction (only for http-ping monitors).
   stapLogUncTemplate: process.env.STAP_LOG_UNC || DEFAULT_STAP_LOG_UNC,
+  // Remote path of the STAP backend exe controlled by the card "Restart" button.
+  stapExePath: process.env.STAP_EXE_PATH || DEFAULT_STAP_EXE_PATH,
   // Optional Windows credentials to authenticate the SMB session to each host
   // (avoids needing the server's own account to have access). Both must be set.
   // User may be "DOMAIN\\user", "user@domain" or a plain username.

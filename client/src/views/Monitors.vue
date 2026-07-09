@@ -120,6 +120,30 @@ const logModal = ref<LogModal | null>(null);
 // Monitor ids whose remote log is currently being read (button spinner state).
 const checkingUsers = ref<Set<number>>(new Set());
 
+// Monitor ids whose remote program is currently being restarted (spinner state).
+const restarting = ref<Set<number>>(new Set());
+
+// Stops and restarts the remote STAP backend for a monitor (or starts it if it
+// was not running). Surfaces the outcome on the card's user-error line.
+async function restartProgram(m: Monitor) {
+  restarting.value = new Set(restarting.value).add(m.id);
+  try {
+    await store.restartProgram(m.id);
+    const target = store.monitors.find((x) => x.id === m.id);
+    if (target) target.usersError = null;
+  } catch (e: any) {
+    const target = store.monitors.find((x) => x.id === m.id);
+    if (target) {
+      target.usersError =
+        e?.response?.data?.error ?? "Could not restart the program.";
+    }
+  } finally {
+    const next = new Set(restarting.value);
+    next.delete(m.id);
+    restarting.value = next;
+  }
+}
+
 async function checkUsers(m: Monitor) {
   checkingUsers.value = new Set(checkingUsers.value).add(m.id);
   try {
@@ -176,6 +200,26 @@ async function remove(m: Monitor) {
 
 function openWebPage(m: Monitor) {
   window.open(m.target, "_blank", "noopener");
+}
+
+// Hostname of a monitor's target: the URL host for http(-ping), else the bare
+// "host" / "host:port" target with any port/path stripped.
+function hostOf(m: Monitor): string {
+  try {
+    return new URL(m.target).hostname || m.target;
+  } catch {
+    return m.target.split("/")[0].split(":")[0].trim();
+  }
+}
+
+// Opens Windows Remote Desktop (mstsc) straight to the host via the custom
+// pulsar-rdp: URL protocol, which each PC registers once (see public/
+// pulsar-rdp.reg). A browser can't launch mstsc itself, so the protocol handler
+// runs it locally on the user's machine and the login dialog appears there.
+function openRemoteDesktop(m: Monitor) {
+  const host = hostOf(m);
+  if (!host) return;
+  window.location.href = `pulsar-rdp:${host}`;
 }
 
 async function showLogFiles(m: Monitor) {
@@ -322,6 +366,13 @@ async function showLogFiles(m: Monitor) {
               🌐 Open
             </button>
             <button
+              class="btn btn-sm"
+              title="Open a Remote Desktop login to this host (needs the one-time pulsar-rdp setup)"
+              @click="openRemoteDesktop(m)"
+            >
+              🖥️ Remote Desktop
+            </button>
+            <button
               v-if="m.type === 'http-ping'"
               class="btn btn-sm"
               title="Read the full remote log now and refresh the logged-in users"
@@ -337,6 +388,16 @@ async function showLogFiles(m: Monitor) {
               @click="showLogFiles(m)"
             >
               📁 Log files
+            </button>
+            <!-- Restart temporarily hidden: flip v-if back to m.type === 'http-ping' to re-enable. -->
+            <button
+              v-if="false && m.type === 'http-ping'"
+              class="btn btn-sm"
+              title="Stop and restart the STAP backend on the host (starts it if not running)"
+              :disabled="restarting.has(m.id)"
+              @click="restartProgram(m)"
+            >
+              {{ restarting.has(m.id) ? "⏳ Restarting…" : "🔄 Restart" }}
             </button>
             <button class="btn btn-sm" @click="store.toggle(m.id)">
               {{ m.active ? "Pause" : "Resume" }}

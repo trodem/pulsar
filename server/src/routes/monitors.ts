@@ -19,6 +19,7 @@ import {
   listLogFolder,
   logFolderForTarget,
 } from "../monitors/stap-users.js";
+import { restartStapProgram } from "../monitors/stap-control.js";
 
 const router = Router();
 
@@ -220,6 +221,45 @@ router.post("/:id/check-users", async (req, res) => {
   }
   const { users, error } = await checkMonitorUsers(monitor);
   res.json({ users, error });
+});
+
+// Stops the running STAP backend executable on the monitor's host and starts a
+// fresh one (or just starts it if it wasn't running). Triggered manually by the
+// "Restart" button on the monitor card. http-ping monitors only.
+router.post("/:id/restart-program", async (req, res) => {
+  const id = Number(req.params.id);
+  const monitor = db.select().from(monitors).where(eq(monitors.id, id)).get();
+  if (!monitor) {
+    res.status(404).json({ error: "Monitor not found" });
+    return;
+  }
+  if (!isStapMonitor(monitor)) {
+    res.status(400).json({ error: "Only http-ping monitors can be restarted" });
+    return;
+  }
+  // Guard: never restart while anyone is still logged in. Read the remote log
+  // now (this also refreshes the users shown on the card). If it can't be read,
+  // we can't prove nobody is online, so we refuse rather than risk it.
+  const { users, error } = await checkMonitorUsers(monitor);
+  if (error) {
+    res.status(502).json({ error: `Cannot verify online users: ${error}` });
+    return;
+  }
+  if (users.length > 0) {
+    res.status(409).json({
+      error: `Cannot restart: ${users.length} user(s) online — ${users.join(", ")}`,
+      users,
+    });
+    return;
+  }
+  try {
+    const message = await restartStapProgram(monitor);
+    res.json({ ok: true, message });
+  } catch (err) {
+    res
+      .status(502)
+      .json({ error: err instanceof Error ? err.message : "Restart failed" });
+  }
 });
 
 // Lists the files inside the monitor's remote log folder (for the modal).

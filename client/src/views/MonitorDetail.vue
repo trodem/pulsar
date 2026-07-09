@@ -15,6 +15,29 @@ const monitor = ref<Monitor | null>(null);
 const beats = ref<Heartbeat[]>([]);
 const id = Number(route.params.id);
 
+// "Restart" button state: whether a restart is in flight, and the last outcome
+// shown next to the button (empty = nothing to show yet).
+const restarting = ref(false);
+const restartMsg = ref<{ ok: boolean; text: string } | null>(null);
+
+// Stops and restarts the remote STAP backend for this monitor (or starts it if
+// it was not running).
+async function restartProgram() {
+  restarting.value = true;
+  restartMsg.value = null;
+  try {
+    const { message } = await store.restartProgram(id);
+    restartMsg.value = { ok: true, text: message || "Restarted" };
+  } catch (e: any) {
+    restartMsg.value = {
+      ok: false,
+      text: e?.response?.data?.error ?? "Could not restart the program.",
+    };
+  } finally {
+    restarting.value = false;
+  }
+}
+
 function onHeartbeat(p: { monitorId: number; heartbeat: Heartbeat }) {
   if (p.monitorId !== id) return;
   beats.value = [...beats.value, p.heartbeat].slice(-100);
@@ -38,6 +61,26 @@ onUnmounted(() => {
   getSocket()?.off("heartbeat", onHeartbeat);
 });
 
+// Hostname of the monitor's target: the URL host for http(-ping), else the bare
+// "host" / "host:port" target with any port/path stripped.
+function hostOf(m: Monitor): string {
+  try {
+    return new URL(m.target).hostname || m.target;
+  } catch {
+    return m.target.split("/")[0].split(":")[0].trim();
+  }
+}
+
+// Opens Windows Remote Desktop (mstsc) straight to the host via the custom
+// pulsar-rdp: URL protocol, which each PC registers once (see public/
+// pulsar-rdp.reg). A browser can't launch mstsc itself, so the protocol handler
+// runs it locally on the user's machine and the login dialog appears there.
+function openRemoteDesktop(m: Monitor) {
+  const host = hostOf(m);
+  if (!host) return;
+  window.location.href = `pulsar-rdp:${host}`;
+}
+
 // Important beats = state transitions, shown as an event log.
 const events = computed(() =>
   [...beats.value].reverse().filter((b) => b.important).slice(0, 30),
@@ -60,7 +103,34 @@ const events = computed(() =>
           {{ monitor.interval }}s
         </div>
       </div>
-      <button class="btn" @click="router.push('/')">← Back</button>
+      <div style="display: flex; align-items: center; gap: 12px">
+        <span
+          v-if="restartMsg"
+          class="muted"
+          :style="{ color: restartMsg.ok ? 'var(--up)' : 'var(--down)' }"
+          :title="restartMsg.text"
+        >
+          {{ restartMsg.ok ? "✓" : "⚠" }} {{ restartMsg.text }}
+        </span>
+        <button
+          class="btn"
+          title="Open a Remote Desktop login to this host (needs the one-time pulsar-rdp setup)"
+          @click="openRemoteDesktop(monitor)"
+        >
+          🖥️ Remote Desktop
+        </button>
+        <!-- Restart temporarily hidden: set v-if back to monitor.type === 'http-ping' to re-enable. -->
+        <button
+          v-if="false"
+          class="btn"
+          title="Stop and restart the STAP backend on the host (starts it if not running)"
+          :disabled="restarting"
+          @click="restartProgram"
+        >
+          {{ restarting ? "⏳ Restarting…" : "🔄 Restart" }}
+        </button>
+        <button class="btn" @click="router.push('/')">← Back</button>
+      </div>
     </div>
 
     <div class="stat-cards">
