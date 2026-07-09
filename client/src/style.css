@@ -741,6 +741,14 @@ select {
   gap: 14px;
 }
 
+/* "Check users" action on a group header; kept vertically centered against the
+   baseline-aligned title/stats. The section-stats margin-left:auto pushes both
+   the stats and this button to the right edge of the header. */
+.section-check-users {
+  align-self: center;
+  flex-shrink: 0;
+}
+
 .section-stat {
   font-size: 13px;
   font-weight: 600;

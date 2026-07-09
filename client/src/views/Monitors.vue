@@ -137,6 +137,14 @@ async function checkUsers(m: Monitor) {
   }
 }
 
+// Reads the remote log for every http-ping monitor in a group at once. Non
+// http-ping monitors have no remote users, so they are skipped. Each check
+// reuses checkUsers, so per-monitor spinner state and errors still apply.
+async function checkGroupUsers(monitors: Monitor[]) {
+  const targets = monitors.filter((m) => m.type === "http-ping");
+  await Promise.all(targets.map((m) => checkUsers(m)));
+}
+
 onMounted(async () => {
   await Promise.all([
     store.fetchAll(),
@@ -240,6 +248,21 @@ async function showLogFiles(m: Monitor) {
       <span class="section-caret" :class="{ collapsed: collapsed.has(sectionKey(section.id)) }">▾</span>
       <h2>{{ section.name }}</h2>
       <span class="muted">{{ section.monitors.length }}</span>
+      <button
+        v-if="section.monitors.some((m) => m.type === 'http-ping')"
+        class="btn btn-sm section-check-users"
+        title="Read the remote log for every http-ping monitor in this group"
+        :disabled="section.monitors.some((m) => m.type === 'http-ping' && checkingUsers.has(m.id))"
+        @click.stop="checkGroupUsers(section.monitors)"
+        @keydown.enter.stop
+        @keydown.space.stop
+      >
+        {{
+          section.monitors.some((m) => m.type === 'http-ping' && checkingUsers.has(m.id))
+            ? "⏳ Checking…"
+            : "👥 Online users"
+        }}
+      </button>
       <div class="section-stats">
         <span class="section-stat" style="color: var(--up)" title="Up">
           ● {{ section.stats.up }}
@@ -305,7 +328,7 @@ async function showLogFiles(m: Monitor) {
               :disabled="checkingUsers.has(m.id)"
               @click="checkUsers(m)"
             >
-              {{ checkingUsers.has(m.id) ? "⏳ Checking…" : "👥 Check users" }}
+              {{ checkingUsers.has(m.id) ? "⏳ Checking…" : "👥 Online users" }}
             </button>
             <button
               v-if="m.type === 'http-ping'"
