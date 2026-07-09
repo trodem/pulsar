@@ -242,11 +242,32 @@ select {
   font-size: 13px;
 }
 
-/* Cards / monitor rows */
+/* Icon-only action button (monitor card header). Square, the emoji centred;
+   the label is exposed via the native title tooltip / aria-label. */
+.btn-icon {
+  padding: 0;
+  width: 32px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 15px;
+  line-height: 1;
+}
+
+.btn-sm.btn-icon {
+  width: 30px;
+  height: 30px;
+}
+
+/* Cards / monitor rows: a responsive grid of equal-width cards, each at least
+   ~480px, wrapping onto as many columns as fit. auto-fill (not auto-fit) keeps
+   the cards a consistent width instead of stretching a lone card across the
+   whole row; min(480px, 100%) stops a single column overflowing narrow screens. */
 .monitor-grid {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(470px, 100%), 1fr));
+  gap: 14px;
 }
 
 /* Expand/collapse animation for a group's monitor grid. Animating the grid row
@@ -300,7 +321,8 @@ select {
 }
 
 .header-right.monitor-actions {
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+  flex-shrink: 0;
   justify-content: flex-end;
 }
 
@@ -334,13 +356,24 @@ select {
   white-space: nowrap;
 }
 
-/* Card body: the two-column layout (details + meta/actions). */
+/* Card body: details on top, a stats footer pinned to the bottom. flex:1 lets
+   the body fill the card height (cards in a row are stretched to the tallest),
+   so the footers line up across a row. */
 .monitor-card-body {
-  display: grid;
-  grid-template-columns: 1fr auto;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
   gap: 14px;
-  align-items: center;
-  padding: 16px 18px;
+  padding: 8px 18px 16px;
+}
+
+.monitor-details {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 8px;
+  min-width: 0;
 }
 
 .status-pill {
@@ -387,6 +420,15 @@ select {
   font-size: 13px;
 }
 
+/* Target URL shown as a second line in the card header, below the LED/name row
+   (flex-basis:100% forces it onto its own line within the wrapping header). */
+.header-target {
+  flex-basis: 100%;
+  margin-top: 2px;
+  font-size: 12px;
+  word-break: break-all;
+}
+
 .type-tag {
   font-size: 11px;
   text-transform: uppercase;
@@ -396,10 +438,15 @@ select {
   border-radius: 5px;
 }
 
+/* Stats footer: the three stat blocks spread evenly along a divider at the
+   bottom of the card, so they align across every card in a row. */
 .monitor-meta {
   display: flex;
-  gap: 22px;
-  text-align: right;
+  justify-content: space-between;
+  gap: 18px;
+  margin-top: auto;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
 }
 
 .meta-block .label {
@@ -439,8 +486,9 @@ select {
   font-weight: 600;
   padding: 2px 8px;
   border-radius: 999px;
-  background: var(--bg-elev);
-  border: 1px solid var(--border);
+  background: rgba(56, 189, 248, 0.15);
+  border: 1px solid rgba(56, 189, 248, 0.4);
+  color: var(--accent);
 }
 
 .monitor-users-error {
@@ -519,6 +567,52 @@ select {
 .heartbeat-bar.paused .hb {
   background: var(--text-dim);
   opacity: 0.4;
+}
+
+/* Status LED — shown before the monitor name on each card (Monitors page) in
+   place of the status pill: a single glowing dot coloured by the current
+   status. */
+.led {
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: var(--text-dim);
+}
+
+/* LED sitting inline in the card header, ahead of the monitor name. */
+.led-header {
+  margin-right: 2px;
+}
+
+.led.status-up {
+  background: var(--up);
+  box-shadow: 0 0 8px 1px var(--up), 0 0 0 3px rgba(34, 197, 94, 0.18);
+}
+
+.led.status-down {
+  background: var(--down);
+  box-shadow: 0 0 8px 1px var(--down), 0 0 0 3px rgba(239, 68, 68, 0.18);
+}
+
+.led.status-degraded {
+  background: var(--degraded);
+  box-shadow: 0 0 8px 1px var(--degraded), 0 0 0 3px rgba(249, 115, 22, 0.18);
+}
+
+.led.status-maintenance {
+  background: var(--maintenance);
+  box-shadow: 0 0 8px 1px var(--maintenance), 0 0 0 3px rgba(59, 130, 246, 0.18);
+}
+
+.led.status-pending {
+  background: var(--pending);
+  box-shadow: 0 0 8px 1px var(--pending), 0 0 0 3px rgba(245, 158, 11, 0.18);
+}
+
+.led.led-paused {
+  background: var(--text-dim);
+  opacity: 0.5;
 }
 
 /* Forms / modal */
@@ -803,6 +897,90 @@ select {
 button.tag-chip {
   cursor: pointer;
   transition: filter 0.12s ease;
+}
+
+/* Status filter dropdown (Monitors toolbar). A trigger button opens a menu of
+   toggleable status options; the trigger shows a count badge when any is active. */
+.status-filter-dd {
+  position: relative;
+  display: flex;
+}
+
+.status-filter-dd .btn.active {
+  border-color: var(--accent, var(--up));
+  color: var(--text);
+}
+
+.status-filter-dd .caret {
+  margin-left: 4px;
+  font-size: 11px;
+  opacity: 0.7;
+}
+
+/* Full-viewport catcher so a click anywhere else closes the menu. */
+.status-menu-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+}
+
+.status-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 41;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 200px;
+  padding: 8px;
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+}
+
+.status-option {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 8px 10px;
+  border-radius: 7px;
+  font-size: 14px;
+  color: var(--text-dim);
+  transition: background 0.12s, color 0.12s;
+}
+
+.status-option:hover {
+  background: var(--bg-elev-2);
+  color: var(--text);
+}
+
+.status-option.active {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.status-option-label {
+  flex: 1;
+}
+
+.status-option-check {
+  width: 14px;
+  text-align: center;
+  color: var(--accent);
+}
+
+.status-menu-clear {
+  margin-top: 6px;
+  width: 100%;
+}
+
+.status-chip-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  flex-shrink: 0;
 }
 
 /* Monitor search box (global toolbar). */

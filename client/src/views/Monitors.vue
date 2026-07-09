@@ -5,7 +5,6 @@ import { useGroupStore } from "../stores/groups";
 import { useTagStore } from "../stores/tags";
 import { useUiStore } from "../stores/ui";
 import type { LogFileEntry, Monitor } from "../types";
-import HeartbeatBar from "../components/HeartbeatBar.vue";
 import MonitorForm from "../components/MonitorForm.vue";
 import { fileSize, ms, relTime, statusLabel, uptimePct } from "../format";
 
@@ -34,21 +33,33 @@ function toggleSection(id: number | null) {
   localStorage.setItem(COLLAPSED_KEY, JSON.stringify([...next]));
 }
 
-// Search text and tag filter both live in the global toolbar and are shared
-// through the UI store. A monitor must match both. Empty filter = no filter.
+// The status filter chips shown in the toolbar, in display order. Codes match
+// the heartbeat status values (1 up, 2 degraded, 3 maintenance, 0 down).
+const statusFilters = [
+  { value: 1, label: "Up", color: "var(--up)" },
+  { value: 2, label: "Degraded", color: "var(--degraded)" },
+  { value: 3, label: "Maintenance", color: "var(--maintenance)" },
+  { value: 0, label: "Down", color: "var(--down)" },
+] as const;
+
+// Search text, tag filter and status filter all live in the UI store so they
+// survive navigation. A monitor must match all three. Empty filter = no filter.
 const filteredMonitors = computed(() => {
   const q = ui.monitorSearch.trim().toLowerCase();
   const tagIds = ui.activeTagIds;
+  const statuses = ui.activeStatuses;
   return store.monitors.filter((m) => {
     const tagOk =
       tagIds.size === 0 ||
       (m.tags ?? []).some((t) => tagIds.has(t.id));
+    const statusOk =
+      statuses.size === 0 || statuses.has(m.stats?.status ?? -1);
     const searchOk =
       q === "" ||
       m.name.toLowerCase().includes(q) ||
       m.target.toLowerCase().includes(q) ||
       (m.tags ?? []).some((t) => t.name.toLowerCase().includes(q));
-    return tagOk && searchOk;
+    return tagOk && statusOk && searchOk;
   });
 });
 
@@ -108,6 +119,9 @@ const sections = computed(() => {
 
 const showForm = ref(false);
 const editing = ref<Monitor | null>(null);
+
+// Whether the toolbar's status-filter dropdown is open.
+const statusMenuOpen = ref(false);
 
 interface LogModal {
   name: string;
@@ -250,6 +264,48 @@ async function showLogFiles(m: Monitor) {
   <div class="page-head">
     <h1>Monitors</h1>
     <div class="page-actions">
+      <div class="status-filter-dd">
+        <button
+          type="button"
+          class="btn btn-sm"
+          :class="{ active: ui.activeStatuses.size }"
+          title="Filter monitors by status"
+          @click="statusMenuOpen = !statusMenuOpen"
+        >
+          Status
+          <span v-if="ui.activeStatuses.size" class="filter-badge">
+            {{ ui.activeStatuses.size }}
+          </span>
+          <span class="caret">▾</span>
+        </button>
+        <template v-if="statusMenuOpen">
+          <div class="status-menu-backdrop" @click="statusMenuOpen = false"></div>
+          <div class="status-menu">
+            <button
+              v-for="s in statusFilters"
+              :key="s.value"
+              type="button"
+              class="status-option"
+              :class="{ active: ui.activeStatuses.has(s.value) }"
+              @click="ui.toggleStatusFilter(s.value)"
+            >
+              <span class="status-chip-dot" :style="{ background: s.color }"></span>
+              <span class="status-option-label">{{ s.label }}</span>
+              <span class="status-option-check">
+                {{ ui.activeStatuses.has(s.value) ? "✓" : "" }}
+              </span>
+            </button>
+            <button
+              v-if="ui.activeStatuses.size"
+              type="button"
+              class="btn btn-sm status-menu-clear"
+              @click="ui.clearStatusFilter()"
+            >
+              Clear filter
+            </button>
+          </div>
+        </template>
+      </div>
       <div class="search-box">
         <span class="search-icon">🔍</span>
         <input
@@ -348,9 +404,11 @@ async function showLogFiles(m: Monitor) {
       <div v-for="m in section.monitors" :key="m.id" class="monitor-card">
         <div class="monitor-card-header">
           <div class="header-left">
-            <span class="status-pill" :class="statusLabel(m.stats?.status).cls">
-              {{ statusLabel(m.stats?.status).text }}
-            </span>
+            <span
+              class="led led-header"
+              :class="m.active ? statusLabel(m.stats?.status).cls : 'led-paused'"
+              :title="m.active ? statusLabel(m.stats?.status).text : 'Paused'"
+            ></span>
             <router-link :to="`/monitor/${m.id}`" class="monitor-name">
               {{ m.name }}
             </router-link>
@@ -364,86 +422,108 @@ async function showLogFiles(m: Monitor) {
             >
               {{ t.name }}
             </span>
+            <div class="header-target monitor-target">
+              {{ m.target }}<span v-if="m.port">:{{ m.port }}</span>
+            </div>
           </div>
           <div class="header-right monitor-actions">
             <button
               v-if="m.type === 'http' || m.type === 'http-ping'"
-              class="btn btn-sm"
-              title="Open the monitored URL in a new tab"
+              class="btn btn-sm btn-icon"
+              title="Open"
+              aria-label="Open"
               @click="openWebPage(m)"
             >
-              🌐 Open
+              🌐
             </button>
             <!-- Remote Desktop temporarily hidden (pending IT review of the
                  launch mechanism): remove v-if="false" to re-enable. -->
             <button
               v-if="false"
-              class="btn btn-sm"
-              title="Open a Remote Desktop login to this host (needs the one-time pulsar-rdp setup)"
+              class="btn btn-sm btn-icon"
+              title="Remote Desktop"
+              aria-label="Remote Desktop"
               @click="openRemoteDesktop(m)"
             >
-              🖥️ Remote Desktop
+              🖥️
             </button>
             <button
               v-if="m.type === 'http-ping'"
-              class="btn btn-sm"
-              title="Read the full remote log now and refresh the logged-in users"
+              class="btn btn-sm btn-icon"
+              :title="checkingUsers.has(m.id) ? 'Checking…' : 'Online users'"
+              :aria-label="checkingUsers.has(m.id) ? 'Checking…' : 'Online users'"
               :disabled="checkingUsers.has(m.id)"
               @click="checkUsers(m)"
             >
-              {{ checkingUsers.has(m.id) ? "⏳ Checking…" : "👥 Online users" }}
+              {{ checkingUsers.has(m.id) ? "⏳" : "👥" }}
             </button>
+            <!-- Log files temporarily hidden: flip v-if back to
+                 m.type === 'http-ping' to re-enable. -->
             <button
-              v-if="m.type === 'http-ping'"
-              class="btn btn-sm"
-              title="Show the files in the remote log folder"
+              v-if="false && m.type === 'http-ping'"
+              class="btn btn-sm btn-icon"
+              title="Log files"
+              aria-label="Log files"
               @click="showLogFiles(m)"
             >
-              📁 Log files
+              📁
             </button>
             <!-- Restart temporarily hidden: flip v-if back to m.type === 'http-ping' to re-enable. -->
             <button
               v-if="false && m.type === 'http-ping'"
-              class="btn btn-sm"
-              title="Stop and restart the STAP backend on the host (starts it if not running)"
+              class="btn btn-sm btn-icon"
+              :title="restarting.has(m.id) ? 'Restarting…' : 'Restart'"
+              :aria-label="restarting.has(m.id) ? 'Restarting…' : 'Restart'"
               :disabled="restarting.has(m.id)"
               @click="restartProgram(m)"
             >
-              {{ restarting.has(m.id) ? "⏳ Restarting…" : "🔄 Restart" }}
+              {{ restarting.has(m.id) ? "⏳" : "🔄" }}
             </button>
-            <button class="btn btn-sm" @click="store.toggle(m.id)">
-              {{ m.active ? "Pause" : "Resume" }}
+            <button
+              class="btn btn-sm btn-icon"
+              :title="m.active ? 'Pause' : 'Resume'"
+              :aria-label="m.active ? 'Pause' : 'Resume'"
+              @click="store.toggle(m.id)"
+            >
+              {{ m.active ? "⏸️" : "▶️" }}
             </button>
-            <button class="btn btn-sm" @click="openEdit(m)">Edit</button>
-            <button class="btn btn-sm btn-danger" @click="remove(m)">Delete</button>
+            <button
+              class="btn btn-sm btn-icon"
+              title="Edit"
+              aria-label="Edit"
+              @click="openEdit(m)"
+            >
+              ✏️
+            </button>
+            <button
+              class="btn btn-sm btn-icon btn-danger"
+              title="Delete"
+              aria-label="Delete"
+              @click="remove(m)"
+            >
+              🗑️
+            </button>
           </div>
         </div>
         <div class="monitor-card-body">
-        <div>
-        <div class="monitor-target">
-          {{ m.target }}<span v-if="m.port">:{{ m.port }}</span>
-        </div>
+        <div class="monitor-details">
         <div v-if="m.users?.length" class="monitor-users">
-          <span class="label">Users:</span>
+          <span class="label">Online Users:</span>
           <span v-for="u in m.users" :key="u" class="user-chip">{{ u }}</span>
         </div>
         <div
           v-else-if="m.users && !m.usersError"
           class="monitor-users"
         >
-          <span class="label">Users:</span>
+          <span class="label">Online Users:</span>
           <span class="muted">No users</span>
         </div>
         <div v-if="m.usersError" class="monitor-users-error" :title="m.usersError">
-          ⚠ Users: {{ m.usersError }}
-        </div>
-        <div style="margin-top: 12px">
-          <HeartbeatBar :beats="m.heartbeats ?? []" :paused="!m.active" />
+          ⚠ Online Users: {{ m.usersError }}
         </div>
       </div>
 
-      <div style="display: flex; flex-direction: column; gap: 12px; align-items: flex-end">
-        <div class="monitor-meta">
+      <div class="monitor-meta">
           <div class="meta-block">
             <div class="label">24h uptime</div>
             <div class="value">{{ uptimePct(m.stats?.uptime24h) }}</div>
@@ -459,7 +539,6 @@ async function showLogFiles(m: Monitor) {
             </div>
           </div>
         </div>
-      </div>
       </div>
       </div>
     </div>

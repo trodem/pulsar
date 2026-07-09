@@ -96,14 +96,18 @@ function scheduleSummary(m: Maintenance): string {
   return `Monthly · day ${days} · ${window}`;
 }
 
-function coverageSummary(m: Maintenance): string {
-  const parts: string[] = [];
-  if (m.monitorIds.length)
-    parts.push(`${m.monitorIds.length} monitor${m.monitorIds.length > 1 ? "s" : ""}`);
-  if (m.groupIds.length)
-    parts.push(`${m.groupIds.length} group${m.groupIds.length > 1 ? "s" : ""}`);
-  return parts.length ? parts.join(" + ") : "nothing selected";
-}
+const STRATEGY_LABEL: Record<MaintenanceStrategy, string> = {
+  single: "One-off",
+  daily: "Daily",
+  weekly: "Weekly",
+  monthly: "Monthly",
+};
+
+// Name lookups so a window's covered targets render as readable chips.
+const monitorName = (id: number) =>
+  monitorStore.monitors.find((m) => m.id === id)?.name ?? `#${id}`;
+const groupName = (id: number) =>
+  groupStore.items.find((g) => g.id === id)?.name ?? `#${id}`;
 
 // --- form open/save --------------------------------------------------------
 function resetForm() {
@@ -250,28 +254,47 @@ const groups = computed(() => groupStore.items);
     No maintenance windows configured.
   </div>
 
-  <div class="monitor-grid">
-    <div v-for="m in store.items" :key="m.id" class="monitor-card">
-      <div>
-        <div class="monitor-top">
-          <span class="monitor-name">{{ m.title }}</span>
-          <span class="type-tag">{{ m.strategy }}</span>
-          <span v-if="!m.active" class="muted">(disabled)</span>
+  <div class="mw-grid">
+    <div v-for="m in store.items" :key="m.id" class="mw-card" :class="{ disabled: !m.active }">
+      <div class="mw-head">
+        <div class="mw-title-wrap">
+          <span class="mw-dot" :class="{ off: !m.active }"></span>
+          <span class="mw-title">{{ m.title }}</span>
+          <span class="mw-badge">{{ STRATEGY_LABEL[m.strategy] }}</span>
+          <span v-if="!m.active" class="mw-badge mw-badge-off">Disabled</span>
         </div>
-        <div class="monitor-target">{{ scheduleSummary(m) }}</div>
-        <div class="muted" style="font-size: 13px; margin-top: 2px">
-          Covers {{ coverageSummary(m) }}
-        </div>
-        <div v-if="m.description" class="muted" style="font-size: 13px; margin-top: 2px">
-          {{ m.description }}
+        <div class="mw-actions">
+          <button class="btn btn-sm" @click="store.toggle(m.id)">
+            {{ m.active ? "Disable" : "Enable" }}
+          </button>
+          <button class="btn btn-sm" @click="openEdit(m)">Edit</button>
+          <button class="btn btn-sm btn-danger" @click="remove(m)">Delete</button>
         </div>
       </div>
-      <div class="monitor-actions">
-        <button class="btn btn-sm" @click="store.toggle(m.id)">
-          {{ m.active ? "Disable" : "Enable" }}
-        </button>
-        <button class="btn btn-sm" @click="openEdit(m)">Edit</button>
-        <button class="btn btn-sm btn-danger" @click="remove(m)">Delete</button>
+
+      <div class="mw-schedule">
+        <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="9" />
+          <polyline points="12 7 12 12 15 14" />
+        </svg>
+        <span>{{ scheduleSummary(m) }}</span>
+      </div>
+
+      <div v-if="m.description" class="mw-desc">{{ m.description }}</div>
+
+      <div class="mw-coverage">
+        <template v-if="m.groupIds.length || m.monitorIds.length">
+          <span v-for="gid in m.groupIds" :key="'g' + gid" class="mw-chip mw-chip-group">
+            <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+            </svg>
+            {{ groupName(gid) }}
+          </span>
+          <span v-for="mid in m.monitorIds" :key="'m' + mid" class="mw-chip">
+            {{ monitorName(mid) }}
+          </span>
+        </template>
+        <span v-else class="mw-empty">No targets selected</span>
       </div>
     </div>
   </div>
@@ -416,6 +439,122 @@ const groups = computed(() => groupStore.items);
 </template>
 
 <style scoped>
+/* --- window cards --- */
+.mw-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.mw-card {
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--maintenance);
+  border-radius: var(--radius);
+  padding: 14px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  transition: border-color 0.15s;
+}
+.mw-card:hover {
+  border-color: var(--accent);
+  border-left-color: var(--maintenance);
+}
+.mw-card.disabled {
+  border-left-color: var(--border);
+  opacity: 0.62;
+}
+.mw-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+.mw-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+.mw-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--maintenance);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.18);
+  flex-shrink: 0;
+}
+.mw-dot.off {
+  background: var(--text-dim);
+  box-shadow: none;
+}
+.mw-title {
+  font-weight: 600;
+  font-size: 16px;
+}
+.mw-badge {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: var(--maintenance);
+  background: rgba(59, 130, 246, 0.14);
+  padding: 2px 8px;
+  border-radius: 20px;
+}
+.mw-badge-off {
+  color: var(--text-dim);
+  background: transparent;
+  border: 1px solid var(--border);
+}
+.mw-actions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.mw-schedule {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13.5px;
+  color: var(--text);
+}
+.mw-schedule svg {
+  color: var(--text-dim);
+  flex-shrink: 0;
+}
+.mw-desc {
+  font-size: 13px;
+  color: var(--text-dim);
+}
+.mw-coverage {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.mw-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  color: var(--text);
+  background: var(--bg-elev-2);
+  border: 1px solid var(--border);
+  padding: 2px 9px;
+  border-radius: 6px;
+}
+.mw-chip-group {
+  color: var(--accent);
+  border-color: rgba(56, 189, 248, 0.35);
+}
+.mw-empty {
+  font-size: 12px;
+  color: var(--text-dim);
+  font-style: italic;
+}
+
 .field-row {
   display: flex;
   gap: 12px;
@@ -463,5 +602,16 @@ const groups = computed(() => groupStore.items);
   margin: 0;
   font-weight: 400;
   cursor: pointer;
+}
+/* The global `.field input { width: 100% }` stretches these checkboxes and
+   pushes the labels around — pin them left and let the label fill the rest. */
+.pick-row input {
+  width: auto;
+  flex-shrink: 0;
+  margin: 0;
+}
+.pick-row span {
+  flex: 1;
+  min-width: 0;
 }
 </style>
