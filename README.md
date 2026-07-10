@@ -1,4 +1,4 @@
-# Uptime Clone
+# Pulsar
 
 A self-hosted uptime monitor inspired by [Uptime Kuma](https://github.com/louislam/uptime-kuma),
 built with an Express + TypeScript backend, a Vue 3 frontend, and a SQLite database.
