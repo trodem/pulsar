@@ -34,6 +34,7 @@ export async function initSchema(): Promise<void> {
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       username TEXT NOT NULL UNIQUE,
       password_hash TEXT NOT NULL,
+      role TEXT NOT NULL DEFAULT 'user',
       created_at INTEGER NOT NULL DEFAULT (unixepoch())
     );
 
@@ -148,6 +149,17 @@ export async function initSchema(): Promise<void> {
     await client.execute(
       "ALTER TABLE monitors ADD COLUMN position INTEGER NOT NULL DEFAULT 0;",
     );
+  }
+
+  // Migrate databases that predate roles: add the column, then promote every
+  // pre-existing account to admin. Before this feature the sole account was the
+  // admin, so backfilling to 'admin' preserves its full access (the column
+  // default is 'user' for accounts created afterwards).
+  if (!(await columnExists("users", "role"))) {
+    await client.execute(
+      "ALTER TABLE users ADD COLUMN role TEXT NOT NULL DEFAULT 'user';",
+    );
+    await client.execute("UPDATE users SET role = 'admin';");
   }
 }
 

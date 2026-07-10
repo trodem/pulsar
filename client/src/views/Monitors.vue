@@ -4,6 +4,7 @@ import { useMonitorStore } from "../stores/monitors";
 import { useGroupStore } from "../stores/groups";
 import { useTagStore } from "../stores/tags";
 import { useUiStore } from "../stores/ui";
+import { useAuthStore } from "../stores/auth";
 import type { LogFileEntry, Monitor } from "../types";
 import MonitorForm from "../components/MonitorForm.vue";
 import { fileSize, ms, relTime, statusLabel, uptimePct } from "../format";
@@ -12,6 +13,10 @@ const store = useMonitorStore();
 const groupStore = useGroupStore();
 const tagStore = useTagStore();
 const ui = useUiStore();
+const auth = useAuthStore();
+// Read-only ("user") accounts can view everything but not mutate; hide the
+// create/edit/delete/reorder controls for them (the server enforces this too).
+const isAdmin = computed(() => auth.isAdmin);
 
 // Action-button glyphs forced to text (monochrome) presentation with the
 // U+FE0E variation selector so they inherit the button's CSS `color` instead of
@@ -527,6 +532,7 @@ async function showLogFiles(m: Monitor) {
         {{ exporting ? "⏳ Exporting…" : "⬇ Export CSV" }}
       </button>
       <button
+        v-if="isAdmin"
         class="btn btn-sm"
         title="Import monitors from a CSV or Excel file"
         :disabled="importing"
@@ -563,7 +569,7 @@ async function showLogFiles(m: Monitor) {
           ☰
         </button>
       </div>
-      <button class="btn btn-primary btn-sm" @click="openNew">+ New monitor</button>
+      <button v-if="isAdmin" class="btn btn-primary btn-sm" @click="openNew">+ New monitor</button>
     </div>
   </div>
 
@@ -576,7 +582,7 @@ async function showLogFiles(m: Monitor) {
 
   <div v-if="store.monitors.length === 0" class="empty">
     <p>No monitors yet.</p>
-    <button class="btn btn-primary" @click="openNew">Add your first monitor</button>
+    <button v-if="isAdmin" class="btn btn-primary" @click="openNew">Add your first monitor</button>
   </div>
 
   <div v-else-if="sections.length === 0" class="empty">
@@ -630,7 +636,7 @@ async function showLogFiles(m: Monitor) {
         </span>
       </div>
       <button
-        v-if="section.monitors.some((m) => m.type === 'http-ping')"
+        v-if="isAdmin && section.monitors.some((m) => m.type === 'http-ping')"
         class="btn btn-sm section-check-users"
         title="Read the remote log for every http-ping monitor in this group"
         :disabled="section.monitors.some((m) => m.type === 'http-ping' && checkingUsers.has(m.id))"
@@ -668,6 +674,7 @@ async function showLogFiles(m: Monitor) {
         @drop.prevent="onDrop(m)"
       >
         <span
+          v-if="isAdmin"
           class="drag-handle"
           draggable="true"
           title="Drag to reorder"
@@ -734,7 +741,7 @@ async function showLogFiles(m: Monitor) {
             🌐
           </button>
           <button
-            v-if="m.type === 'http-ping'"
+            v-if="isAdmin && m.type === 'http-ping'"
             class="btn btn-sm btn-icon"
             :title="checkingUsers.has(m.id) ? 'Checking…' : 'Online users'"
             :aria-label="checkingUsers.has(m.id) ? 'Checking…' : 'Online users'"
@@ -744,6 +751,7 @@ async function showLogFiles(m: Monitor) {
             {{ checkingUsers.has(m.id) ? "⏳" : "👥" }}
           </button>
           <button
+            v-if="isAdmin"
             class="btn btn-sm btn-icon"
             :class="m.active ? 'btn-pause' : 'btn-play'"
             :title="m.active ? 'Pause' : 'Resume'"
@@ -753,6 +761,7 @@ async function showLogFiles(m: Monitor) {
             {{ m.active ? ICON_PAUSE : ICON_PLAY }}
           </button>
           <button
+            v-if="isAdmin"
             class="btn btn-sm btn-icon"
             title="Edit"
             aria-label="Edit"
@@ -761,6 +770,7 @@ async function showLogFiles(m: Monitor) {
             ✏️
           </button>
           <button
+            v-if="isAdmin"
             class="btn btn-sm btn-icon btn-icon-danger"
             title="Delete"
             aria-label="Delete"
@@ -791,6 +801,7 @@ async function showLogFiles(m: Monitor) {
         <div class="monitor-card-header">
           <div class="header-left">
             <span
+              v-if="isAdmin"
               class="drag-handle"
               draggable="true"
               title="Drag to reorder"
@@ -854,7 +865,7 @@ async function showLogFiles(m: Monitor) {
               🖥️
             </button>
             <button
-              v-if="m.type === 'http-ping'"
+              v-if="isAdmin && m.type === 'http-ping'"
               class="btn btn-sm btn-icon"
               :title="checkingUsers.has(m.id) ? 'Checking…' : 'Online users'"
               :aria-label="checkingUsers.has(m.id) ? 'Checking…' : 'Online users'"
@@ -886,6 +897,7 @@ async function showLogFiles(m: Monitor) {
               {{ restarting.has(m.id) ? "⏳" : "🔄" }}
             </button>
             <button
+              v-if="isAdmin"
               class="btn btn-sm btn-icon"
               :class="m.active ? 'btn-pause' : 'btn-play'"
               :title="m.active ? 'Pause' : 'Resume'"
@@ -895,6 +907,7 @@ async function showLogFiles(m: Monitor) {
               {{ m.active ? ICON_PAUSE : ICON_PLAY }}
             </button>
             <button
+              v-if="isAdmin"
               class="btn btn-sm btn-icon"
               title="Edit"
               aria-label="Edit"
@@ -903,6 +916,7 @@ async function showLogFiles(m: Monitor) {
               ✏️
             </button>
             <button
+              v-if="isAdmin"
               class="btn btn-sm btn-icon btn-icon-danger"
               title="Delete"
               aria-label="Delete"

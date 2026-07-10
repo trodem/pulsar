@@ -3,11 +3,15 @@ import { computed, onMounted, reactive, ref } from "vue";
 import { useMaintenanceStore } from "../stores/maintenances";
 import { useMonitorStore } from "../stores/monitors";
 import { useGroupStore } from "../stores/groups";
+import { useAuthStore } from "../stores/auth";
 import type { Maintenance, MaintenanceStrategy } from "../types";
 
 const store = useMaintenanceStore();
 const monitorStore = useMonitorStore();
 const groupStore = useGroupStore();
+const auth = useAuthStore();
+// Read-only accounts can view maintenance windows but not create/edit them.
+const isAdmin = computed(() => auth.isAdmin);
 
 const showForm = ref(false);
 const editingId = ref<number | null>(null);
@@ -247,7 +251,7 @@ const groups = computed(() => groupStore.items);
 <template>
   <div class="page-head">
     <h1>Maintenance</h1>
-    <button class="btn btn-primary" @click="openNew">+ New window</button>
+    <button v-if="isAdmin" class="btn btn-primary" @click="openNew">+ New window</button>
   </div>
 
   <div v-if="store.items.length === 0" class="empty">
@@ -263,7 +267,7 @@ const groups = computed(() => groupStore.items);
           <span class="mw-badge">{{ STRATEGY_LABEL[m.strategy] }}</span>
           <span v-if="!m.active" class="mw-badge mw-badge-off">Disabled</span>
         </div>
-        <div class="mw-actions">
+        <div v-if="isAdmin" class="mw-actions">
           <button class="btn btn-sm" @click="store.toggle(m.id)">
             {{ m.active ? "Disable" : "Enable" }}
           </button>

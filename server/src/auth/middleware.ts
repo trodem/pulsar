@@ -26,3 +26,23 @@ export function requireAuth(req: Request, res: Response, next: NextFunction) {
   req.user = payload;
   next();
 }
+
+// Read-only guard: `user`-role accounts may only issue safe (read) requests.
+// Any mutating method is rejected with 403. Mount after requireAuth so req.user
+// is populated. Because it keys off the HTTP method rather than a per-route
+// allow-list, it also covers action POSTs (e.g. restart-program) and any route
+// added later. Note: this makes GET the read boundary, so http-ping's
+// "Check users"/"Restart" (both POST) are admin-only.
+const READ_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
+
+export function requireWrite(req: Request, res: Response, next: NextFunction) {
+  if (READ_METHODS.has(req.method)) {
+    next();
+    return;
+  }
+  if (req.user?.role !== "admin") {
+    res.status(403).json({ error: "Read-only account: action not permitted" });
+    return;
+  }
+  next();
+}

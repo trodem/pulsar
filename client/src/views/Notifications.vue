@@ -1,9 +1,13 @@
 <script setup lang="ts">
-import { onMounted, reactive, ref } from "vue";
+import { computed, onMounted, reactive, ref } from "vue";
 import { useNotificationStore } from "../stores/notifications";
+import { useAuthStore } from "../stores/auth";
 import type { Notification } from "../types";
 
 const store = useNotificationStore();
+const auth = useAuthStore();
+// Read-only accounts can view notifications but not create/edit/delete them.
+const isAdmin = computed(() => auth.isAdmin);
 
 const showForm = ref(false);
 const editingId = ref<number | null>(null);
@@ -85,7 +89,7 @@ async function remove(n: Notification) {
 <template>
   <div class="page-head">
     <h1>Notifications</h1>
-    <button class="btn btn-primary" @click="openNew">+ New notification</button>
+    <button v-if="isAdmin" class="btn btn-primary" @click="openNew">+ New notification</button>
   </div>
 
   <div v-if="store.items.length === 0" class="empty">
@@ -105,8 +109,8 @@ async function remove(n: Notification) {
         </div>
       </div>
       <div class="monitor-actions">
-        <button class="btn btn-sm" @click="openEdit(n)">Edit</button>
-        <button class="btn btn-sm btn-danger" @click="remove(n)">Delete</button>
+        <button v-if="isAdmin" class="btn btn-sm" @click="openEdit(n)">Edit</button>
+        <button v-if="isAdmin" class="btn btn-sm btn-danger" @click="remove(n)">Delete</button>
       </div>
     </div>
   </div>

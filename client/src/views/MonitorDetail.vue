@@ -2,6 +2,7 @@
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useMonitorStore } from "../stores/monitors";
+import { useAuthStore } from "../stores/auth";
 import { getSocket } from "../socket";
 import type { Heartbeat, LogFileEntry, Monitor } from "../types";
 import HeartbeatBar from "../components/HeartbeatBar.vue";
@@ -11,6 +12,9 @@ import { fileSize, ms, relTime, statusLabel, uptimePct } from "../format";
 const route = useRoute();
 const router = useRouter();
 const store = useMonitorStore();
+const auth = useAuthStore();
+// Read-only accounts can view a monitor's detail but not act on it.
+const isAdmin = computed(() => auth.isAdmin);
 
 const monitor = ref<Monitor | null>(null);
 const beats = ref<Heartbeat[]>([]);
@@ -266,7 +270,7 @@ const events = computed(() =>
             🖥️ Remote Desktop
           </button>
           <button
-            v-if="monitor.type === 'http-ping'"
+            v-if="isAdmin && monitor.type === 'http-ping'"
             class="btn btn-sm"
             title="Read the remote log and list the logged-in users"
             :disabled="checkingUsers"
@@ -296,16 +300,17 @@ const events = computed(() =>
             {{ restarting ? "⏳ Restarting…" : "🔄 Restart" }}
           </button>
           <button
+            v-if="isAdmin"
             class="btn btn-sm"
             :title="monitor.active ? 'Pause monitoring' : 'Resume monitoring'"
             @click="toggleActive"
           >
             {{ monitor.active ? "⏸️ Pause" : "▶️ Resume" }}
           </button>
-          <button class="btn btn-sm" title="Edit this monitor" @click="showForm = true">
+          <button v-if="isAdmin" class="btn btn-sm" title="Edit this monitor" @click="showForm = true">
             ✏️ Edit
           </button>
-          <button class="btn btn-sm btn-danger" title="Delete this monitor" @click="remove">
+          <button v-if="isAdmin" class="btn btn-sm btn-danger" title="Delete this monitor" @click="remove">
             🗑️ Delete
           </button>
         </div>

@@ -31,9 +31,18 @@ router.post("/setup", async (req, res) => {
     res.status(400).json({ error: "Invalid username or password (min 6 chars)" });
     return;
   }
-  const user = await createUser(parsed.data.username, parsed.data.password);
-  const token = signToken({ uid: user.id, username: user.username });
-  res.json({ token, username: user.username });
+  // The first-run account is always the admin.
+  const user = await createUser(
+    parsed.data.username,
+    parsed.data.password,
+    "admin",
+  );
+  const token = signToken({
+    uid: user.id,
+    username: user.username,
+    role: "admin",
+  });
+  res.json({ token, username: user.username, role: "admin" });
 });
 
 router.post("/login", async (req, res) => {
@@ -47,8 +56,9 @@ router.post("/login", async (req, res) => {
     res.status(401).json({ error: "Wrong username or password" });
     return;
   }
-  const token = signToken({ uid: user.id, username: user.username });
-  res.json({ token, username: user.username });
+  const role = user.role === "admin" ? "admin" : "user";
+  const token = signToken({ uid: user.id, username: user.username, role });
+  res.json({ token, username: user.username, role });
 });
 
 export default router;

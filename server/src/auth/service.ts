@@ -5,9 +5,12 @@ import { db } from "../db/index.js";
 import { users } from "../db/schema.js";
 import { config } from "../config.js";
 
+export type Role = "admin" | "user";
+
 export interface JwtPayload {
   uid: number;
   username: string;
+  role: Role;
 }
 
 export async function countUsers(): Promise<number> {
@@ -15,11 +18,15 @@ export async function countUsers(): Promise<number> {
   return rows.length;
 }
 
-export async function createUser(username: string, password: string) {
+export async function createUser(
+  username: string,
+  password: string,
+  role: Role = "admin",
+) {
   const passwordHash = await bcrypt.hash(password, 10);
   const [user] = await db
     .insert(users)
-    .values({ username, passwordHash })
+    .values({ username, passwordHash, role })
     .returning()
     .all();
   return user;

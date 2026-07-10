@@ -24,10 +24,10 @@ Two independent packages (no root workspace — install/run each separately):
 - `src/events.ts` — typed in-process `EventEmitter` (`bus`) decoupling the scheduler from Socket.IO (avoids a circular import).
 - `src/socket.ts` — authenticates the socket handshake with the same JWT as REST, forwards `heartbeat` and `monitor:users` events to all clients.
 - `src/monitors/stap-users.ts` — **http-ping only.** Reads each host's remote log over a UNC/SMB share (`net use IPC$` with configured creds), parses login/logout lines, returns currently logged-in users. On-demand (the "Check users" button), not polled.
-- `src/auth/` — single-admin JWT + bcrypt; first-run setup wizard.
+- `src/auth/` — JWT + bcrypt; first-run setup wizard. **Two roles** (`users.role`): `admin` (full access) and `user` (read-only). The setup wizard always creates an admin; extra accounts are seeded (`npm run seed:users`, see `src/scripts/`), there is no self-service registration endpoint. The JWT payload carries `role`. `requireAuth` populates `req.user`; `requireWrite` (mounted after it on every protected router in `index.ts`) then rejects any non-`GET`/`HEAD`/`OPTIONS` request from a non-admin with `403`. Because it keys off the HTTP method, it also gates action POSTs (e.g. `check-users`, `restart-program`) — keep read-only actions behind GET or they become admin-only. The client mirrors this (`auth` store `isAdmin`, hidden mutating controls, `adminOnly` route guard on `/settings`) but the server is the enforcement boundary.
 
 ### Database (`src/db/schema.ts`)
-Tables auto-created on boot (`initSchema()`). Tables: `users`, `monitors`, `heartbeats`, `notifications`, `monitor_notifications` (join), `groups`, `tags`, `monitor_tags` (join). A monitor has an optional `group_id` (FK → `groups`, `ON DELETE SET NULL`) and any number of tags via `monitor_tags`. `initSchema()` also runs a lightweight in-code migration (guarded by a `PRAGMA table_info` check) to `ALTER TABLE monitors ADD COLUMN group_id` on databases that predate the groups feature — follow this pattern when adding columns to existing tables, since `CREATE TABLE IF NOT EXISTS` won't alter them. Drizzle Kit (`db:generate` / `db:push`) is available but the app self-initializes the schema.
+Tables auto-created on boot (`initSchema()`). Tables: `users`, `monitors`, `heartbeats`, `notifications`, `monitor_notifications` (join), `groups`, `tags`, `monitor_tags` (join). `users` has a `role` column (`admin` | `user`; see the auth notes above). A monitor has an optional `group_id` (FK → `groups`, `ON DELETE SET NULL`) and any number of tags via `monitor_tags`. `initSchema()` also runs lightweight in-code migrations (each guarded by a `PRAGMA table_info` check) that `ALTER TABLE ... ADD COLUMN` for columns added after the fact — `monitors.group_id`, and `users.role` (which also backfills pre-existing accounts to `admin`, since before roles the sole account was the admin). Follow this pattern when adding columns to existing tables, since `CREATE TABLE IF NOT EXISTS` won't alter them. Drizzle Kit (`db:generate` / `db:push`) is available but the app self-initializes the schema.
 
 ## Commands
 
@@ -38,6 +38,8 @@ npm run dev      # tsx watch, http://localhost:3021
 npm run build    # tsc -> dist/
 npm start        # node dist/index.js
 npm run db:push  # drizzle-kit (schema is also auto-created on boot)
+npm run seed:users  # create/update accounts (edit src/scripts/seed-users.ts)
+# npx tsx src/scripts/delete-user.ts <username>  # remove an account
 ```
 
 ### Frontend (`cd client`)

@@ -26,7 +26,12 @@ function logout() {
     <header class="app-header">
       <div class="brand"><span class="dot"></span> Pulsar</div>
       <div class="header-right">
-        <span class="muted">Signed in as <strong>{{ auth.username }}</strong></span>
+        <span class="muted">
+          Signed in as <strong>{{ auth.username }}</strong>
+          <span class="role-badge" :class="auth.isAdmin ? 'role-admin' : 'role-user'">
+            {{ auth.isAdmin ? "admin" : "read-only" }}
+          </span>
+        </span>
         <button class="btn btn-sm" @click="logout">Log out</button>
       </div>
     </header>
@@ -101,6 +106,7 @@ function logout() {
           <span class="nav-label">Maintenance</span>
         </router-link>
         <router-link
+          v-if="auth.isAdmin"
           class="nav-link"
           :class="{ active: route.name === 'settings' }"
           to="/settings"
@@ -120,3 +126,25 @@ function logout() {
   </div>
   <router-view v-else />
 </template>
+
+<style scoped>
+.role-badge {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  vertical-align: middle;
+}
+.role-admin {
+  background: rgba(79, 157, 255, 0.16);
+  color: #4f9dff;
+}
+.role-user {
+  background: rgba(148, 163, 184, 0.18);
+  color: #94a3b8;
+}
+</style>

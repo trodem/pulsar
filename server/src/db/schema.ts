@@ -5,6 +5,10 @@ export const users = sqliteTable("users", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   username: text("username").notNull().unique(),
   passwordHash: text("password_hash").notNull(),
+  // "admin" = full access; "user" = read-only (GET requests only, enforced by
+  // the requireWrite middleware). The first-run setup wizard always creates an
+  // admin; additional accounts are seeded (see scripts/seed-users.ts).
+  role: text("role").notNull().default("user"),
   createdAt: integer("created_at")
     .notNull()
     .default(sql`(unixepoch())`),
