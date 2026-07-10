@@ -479,7 +479,12 @@ async function showLogFiles(m: Monitor) {
     >
     <div class="section-collapsible-inner">
     <div class="monitor-grid">
-      <div v-for="m in section.monitors" :key="m.id" class="monitor-card">
+      <div
+        v-for="m in section.monitors"
+        :key="m.id"
+        class="monitor-card"
+        :class="'border-' + (m.active ? statusLabel(m.stats?.status).cls : 'status-paused')"
+      >
         <div class="monitor-card-header">
           <div class="header-left">
             <span
@@ -590,7 +595,7 @@ async function showLogFiles(m: Monitor) {
           <span v-for="u in m.users" :key="u" class="user-chip">{{ u }}</span>
         </div>
         <div
-          v-else-if="m.users && !m.usersError"
+          v-else-if="m.type === 'http-ping' && !m.usersError"
           class="monitor-users"
         >
           <span class="label">Online Users:</span>

@@ -365,6 +365,10 @@ select {
 .monitor-card {
   background: var(--bg-elev);
   border: 1px solid var(--border);
+  /* Accent the left edge with the monitor's current status, like the
+     maintenance cards. The colour is set per-status below; default to the
+     neutral border for an unknown/pending state. */
+  border-left: 3px solid var(--border);
   border-radius: var(--radius);
   display: flex;
   flex-direction: column;
@@ -374,6 +378,25 @@ select {
 
 .monitor-card:hover {
   border-color: var(--accent);
+}
+
+.monitor-card.border-status-up {
+  border-left-color: var(--up);
+}
+.monitor-card.border-status-degraded {
+  border-left-color: var(--degraded);
+}
+.monitor-card.border-status-maintenance {
+  border-left-color: var(--maintenance);
+}
+.monitor-card.border-status-down {
+  border-left-color: var(--down);
+}
+.monitor-card.border-status-pending {
+  border-left-color: var(--pending);
+}
+.monitor-card.border-status-paused {
+  border-left-color: var(--border);
 }
 
 /* Card header: a titled band spanning the full card width, with the monitor
@@ -521,7 +544,12 @@ select {
   justify-content: space-between;
   gap: 18px;
   margin-top: auto;
-  padding-top: 14px;
+  /* Pull the divider out to the card edges (cancelling the body's 18px side
+     padding) so the line runs continuously across the full card width, then
+     restore the padding so the stat blocks stay aligned with the body. */
+  margin-left: -18px;
+  margin-right: -18px;
+  padding: 14px 18px 0;
   border-top: 1px solid var(--border);
 }
 
