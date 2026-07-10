@@ -313,6 +313,20 @@ select {
   color: var(--down);
 }
 
+/* Icon-only tints: colour just the glyph, leaving the button's border/background
+   at the neutral default. The glyphs use the text (not emoji) variation selector
+   so they render monochrome and inherit this colour. Green for "resume" (a
+   paused monitor), amber for "pause" (a running one), red for delete. */
+.btn-play {
+  color: var(--up);
+}
+.btn-pause {
+  color: var(--pending);
+}
+.btn-icon-danger {
+  color: var(--down);
+}
+
 .btn-sm {
   padding: 6px 10px;
   font-size: var(--fs-md);
@@ -360,6 +374,125 @@ select {
 .section-collapsible-inner {
   min-height: 0;
   overflow: hidden;
+}
+
+/* Card/list view switch in the Monitors toolbar. Two segmented buttons; the
+   active one is highlighted with the accent colour. */
+.view-toggle {
+  display: inline-flex;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+.view-toggle-btn {
+  padding: 6px 12px;
+  background: var(--bg-elev);
+  color: var(--text-dim);
+  border: none;
+  cursor: pointer;
+  font-size: var(--fs-base);
+  line-height: 1;
+}
+.view-toggle-btn + .view-toggle-btn {
+  border-left: 1px solid var(--border);
+}
+.view-toggle-btn:hover {
+  color: var(--text);
+}
+.view-toggle-btn.active {
+  background: var(--accent);
+  color: #fff;
+}
+
+/* Compact list view: one row per monitor with the status LED, name, target and
+   an "open" action. Shares the status-coloured left border with the cards. */
+.monitor-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.monitor-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 9px 14px;
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--border);
+  border-radius: var(--radius-sm);
+  transition: border-color 0.15s;
+}
+.monitor-row:hover {
+  border-color: var(--accent);
+}
+.monitor-row.border-status-up {
+  border-left-color: var(--up);
+}
+.monitor-row.border-status-degraded {
+  border-left-color: var(--degraded);
+}
+.monitor-row.border-status-maintenance {
+  border-left-color: var(--maintenance);
+}
+.monitor-row.border-status-down {
+  border-left-color: var(--down);
+}
+.monitor-row.border-status-pending {
+  border-left-color: var(--pending);
+}
+.monitor-row.border-status-paused {
+  border-left-color: var(--border);
+}
+.monitor-row .row-name {
+  flex-shrink: 0;
+}
+.monitor-row .row-target {
+  /* Sit right after the name and before the tags; cap the width and truncate so
+     a long URL doesn't push the tags across the row. */
+  flex: 0 1 300px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* Online users for http-ping monitors: chips that wrap and, past a couple of
+   lines, scroll inside their own box so the row height stays bounded. */
+.monitor-row .row-users {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 6px;
+  align-items: center;
+  flex: 2 1 160px;
+  min-width: 0;
+  max-height: 48px;
+  overflow-y: auto;
+}
+.monitor-row .row-users-error {
+  color: var(--down);
+  font-size: var(--fs-md);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* Paused badge + tags, parked at the right end just before the action buttons.
+   margin-left:auto pushes the cluster right when there's no users column; when
+   there is one it grows to fill, so this collapses harmlessly. */
+.monitor-row .row-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 4px 6px;
+  flex-shrink: 0;
+  margin-left: auto;
+}
+.monitor-row .row-actions {
+  flex-shrink: 0;
+  /* Fallback: when there's no users column and no tags, this keeps the buttons
+     pinned right. When row-meta is present its own auto margin wins first. */
+  margin-left: auto;
+  display: flex;
+  gap: 4px;
 }
 
 .monitor-card {
@@ -439,14 +572,17 @@ select {
 }
 
 .paused-badge {
-  font-size: var(--fs-2xs);
-  font-weight: 700;
-  letter-spacing: 0.5px;
+  /* Match .tag-badge's box so paused + tags render at the same size. */
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  line-height: 1;
   text-transform: uppercase;
-  color: var(--text-dim);
-  border: 1px solid var(--border);
+  color: var(--pending);
+  background: var(--pending-soft);
+  border: 1px solid var(--pending);
   border-radius: var(--radius-xs);
   padding: 2px 7px;
+  white-space: nowrap;
 }
 
 .header-check {

@@ -25,11 +25,24 @@ export const useUiStore = defineStore("ui", () => {
   // (1 up, 2 degraded, 3 maintenance, 0 down). Single-select.
   const activeStatus = ref<number | null>(null);
 
+  // How the Monitors page renders each section: "card" (the detailed grid) or
+  // "list" (a compact row per monitor). Persisted so the choice survives
+  // reloads; the store keeps it consistent across navigation.
+  const MONITOR_VIEW_KEY = "monitors.view";
+  const stored = localStorage.getItem(MONITOR_VIEW_KEY);
+  const monitorView = ref<"card" | "list">(stored === "list" ? "list" : "card");
+  function setMonitorView(view: "card" | "list") {
+    monitorView.value = view;
+    localStorage.setItem(MONITOR_VIEW_KEY, view);
+  }
+
   return {
     monitorSearch,
     activeTagIds,
     toggleTagFilter,
     clearTagFilter,
     activeStatus,
+    monitorView,
+    setMonitorView,
   };
 });

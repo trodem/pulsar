@@ -13,6 +13,13 @@ const groupStore = useGroupStore();
 const tagStore = useTagStore();
 const ui = useUiStore();
 
+// Action-button glyphs forced to text (monochrome) presentation with the
+// U+FE0E variation selector so they inherit the button's CSS `color` instead of
+// the emoji's own fixed colours. Lets us tint play/pause/delete icons.
+const ICON_PAUSE = "⏸︎";
+const ICON_PLAY = "▶︎";
+const ICON_DELETE = "\u{1F5D1}︎";
+
 // Section keys the user has collapsed. Persisted so the layout survives reloads.
 // Key is the group id as a string, or "ungrouped" for the catch-all section.
 // Kept separate from the Dashboard so the two pages collapse independently.
@@ -395,6 +402,28 @@ async function showLogFiles(m: Monitor) {
         style="display: none"
         @change="onCsvSelected"
       />
+      <div class="view-toggle" role="group" aria-label="View mode">
+        <button
+          type="button"
+          class="view-toggle-btn"
+          :class="{ active: ui.monitorView === 'card' }"
+          title="Card view"
+          aria-label="Card view"
+          @click="ui.setMonitorView('card')"
+        >
+          ▦
+        </button>
+        <button
+          type="button"
+          class="view-toggle-btn"
+          :class="{ active: ui.monitorView === 'list' }"
+          title="List view"
+          aria-label="List view"
+          @click="ui.setMonitorView('list')"
+        >
+          ☰
+        </button>
+      </div>
       <button class="btn btn-primary btn-sm" @click="openNew">+ New monitor</button>
     </div>
   </div>
@@ -478,7 +507,95 @@ async function showLogFiles(m: Monitor) {
       :class="{ collapsed: collapsed.has(sectionKey(section.id)) }"
     >
     <div class="section-collapsible-inner">
-    <div class="monitor-grid">
+    <div v-if="ui.monitorView === 'list'" class="monitor-list">
+      <div
+        v-for="m in section.monitors"
+        :key="m.id"
+        class="monitor-row"
+        :class="'border-' + (m.active ? statusLabel(m.stats?.status).cls : 'status-paused')"
+      >
+        <span
+          class="led"
+          :class="m.active ? statusLabel(m.stats?.status).cls : 'led-paused'"
+          :title="m.active ? statusLabel(m.stats?.status).text : 'Paused'"
+        ></span>
+        <router-link :to="`/monitor/${m.id}`" class="monitor-name row-name">
+          {{ m.name }}
+        </router-link>
+        <span class="row-target monitor-target" :title="m.target">
+          {{ m.target }}<span v-if="m.port">:{{ m.port }}</span>
+        </span>
+        <div
+          v-if="m.type === 'http-ping'"
+          class="row-users"
+          :title="m.usersError ?? undefined"
+        >
+          <span v-if="m.usersError" class="row-users-error">⚠ {{ m.usersError }}</span>
+          <template v-else-if="m.users?.length">
+            <span v-for="u in m.users" :key="u" class="user-chip">{{ u }}</span>
+          </template>
+          <span v-else class="muted">No users</span>
+        </div>
+        <div v-if="!m.active || (m.tags?.length ?? 0)" class="row-meta">
+          <span v-if="!m.active" class="paused-badge">paused</span>
+          <span
+            v-for="t in m.tags ?? []"
+            :key="t.id"
+            class="tag-badge"
+            :style="{ background: t.color, borderColor: t.color }"
+          >
+            {{ t.name }}
+          </span>
+        </div>
+        <div class="row-actions monitor-actions">
+          <button
+            v-if="m.type === 'http' || m.type === 'http-ping'"
+            class="btn btn-sm btn-icon"
+            title="Open"
+            aria-label="Open"
+            @click="openWebPage(m)"
+          >
+            🌐
+          </button>
+          <button
+            v-if="m.type === 'http-ping'"
+            class="btn btn-sm btn-icon"
+            :title="checkingUsers.has(m.id) ? 'Checking…' : 'Online users'"
+            :aria-label="checkingUsers.has(m.id) ? 'Checking…' : 'Online users'"
+            :disabled="checkingUsers.has(m.id)"
+            @click="checkUsers(m)"
+          >
+            {{ checkingUsers.has(m.id) ? "⏳" : "👥" }}
+          </button>
+          <button
+            class="btn btn-sm btn-icon"
+            :class="m.active ? 'btn-pause' : 'btn-play'"
+            :title="m.active ? 'Pause' : 'Resume'"
+            :aria-label="m.active ? 'Pause' : 'Resume'"
+            @click="store.toggle(m.id)"
+          >
+            {{ m.active ? ICON_PAUSE : ICON_PLAY }}
+          </button>
+          <button
+            class="btn btn-sm btn-icon"
+            title="Edit"
+            aria-label="Edit"
+            @click="openEdit(m)"
+          >
+            ✏️
+          </button>
+          <button
+            class="btn btn-sm btn-icon btn-icon-danger"
+            title="Delete"
+            aria-label="Delete"
+            @click="remove(m)"
+          >
+            {{ ICON_DELETE }}
+          </button>
+        </div>
+      </div>
+    </div>
+    <div v-else class="monitor-grid">
       <div
         v-for="m in section.monitors"
         :key="m.id"
@@ -564,11 +681,12 @@ async function showLogFiles(m: Monitor) {
             </button>
             <button
               class="btn btn-sm btn-icon"
+              :class="m.active ? 'btn-pause' : 'btn-play'"
               :title="m.active ? 'Pause' : 'Resume'"
               :aria-label="m.active ? 'Pause' : 'Resume'"
               @click="store.toggle(m.id)"
             >
-              {{ m.active ? "⏸️" : "▶️" }}
+              {{ m.active ? ICON_PAUSE : ICON_PLAY }}
             </button>
             <button
               class="btn btn-sm btn-icon"
@@ -579,12 +697,12 @@ async function showLogFiles(m: Monitor) {
               ✏️
             </button>
             <button
-              class="btn btn-sm btn-icon btn-danger"
+              class="btn btn-sm btn-icon btn-icon-danger"
               title="Delete"
               aria-label="Delete"
               @click="remove(m)"
             >
-              🗑️
+              {{ ICON_DELETE }}
             </button>
           </div>
         </div>
