@@ -9,6 +9,7 @@ import {
   type Maintenance,
 } from "../db/schema.js";
 import { syncMaintenanceNow } from "../monitors/scheduler.js";
+import { asyncHandler } from "../http.js";
 
 const router = Router();
 
@@ -29,163 +30,194 @@ const maintenanceSchema = z.object({
   groupIds: z.array(z.number().int()).default([]),
 });
 
-function linkedMonitorIds(maintenanceId: number): number[] {
-  return db
-    .select({ id: maintenanceMonitors.monitorId })
-    .from(maintenanceMonitors)
-    .where(eq(maintenanceMonitors.maintenanceId, maintenanceId))
-    .all()
-    .map((r) => r.id);
+async function linkedMonitorIds(maintenanceId: number): Promise<number[]> {
+  return (
+    await db
+      .select({ id: maintenanceMonitors.monitorId })
+      .from(maintenanceMonitors)
+      .where(eq(maintenanceMonitors.maintenanceId, maintenanceId))
+      .all()
+  ).map((r) => r.id);
 }
 
-function linkedGroupIds(maintenanceId: number): number[] {
-  return db
-    .select({ id: maintenanceGroups.groupId })
-    .from(maintenanceGroups)
-    .where(eq(maintenanceGroups.maintenanceId, maintenanceId))
-    .all()
-    .map((r) => r.id);
+async function linkedGroupIds(maintenanceId: number): Promise<number[]> {
+  return (
+    await db
+      .select({ id: maintenanceGroups.groupId })
+      .from(maintenanceGroups)
+      .where(eq(maintenanceGroups.maintenanceId, maintenanceId))
+      .all()
+  ).map((r) => r.id);
 }
 
-function setLinks(
+async function setLinks(
   maintenanceId: number,
   monitorIds: number[],
   groupIds: number[],
-): void {
-  db.delete(maintenanceMonitors)
-    .where(eq(maintenanceMonitors.maintenanceId, maintenanceId))
-    .run();
-  for (const monitorId of monitorIds) {
-    db.insert(maintenanceMonitors).values({ maintenanceId, monitorId }).run();
-  }
-  db.delete(maintenanceGroups)
-    .where(eq(maintenanceGroups.maintenanceId, maintenanceId))
-    .run();
-  for (const groupId of groupIds) {
-    db.insert(maintenanceGroups).values({ maintenanceId, groupId }).run();
-  }
+): Promise<void> {
+  await db.transaction(async (tx) => {
+    await tx
+      .delete(maintenanceMonitors)
+      .where(eq(maintenanceMonitors.maintenanceId, maintenanceId))
+      .run();
+    for (const monitorId of monitorIds) {
+      await tx
+        .insert(maintenanceMonitors)
+        .values({ maintenanceId, monitorId })
+        .run();
+    }
+    await tx
+      .delete(maintenanceGroups)
+      .where(eq(maintenanceGroups.maintenanceId, maintenanceId))
+      .run();
+    for (const groupId of groupIds) {
+      await tx.insert(maintenanceGroups).values({ maintenanceId, groupId }).run();
+    }
+  });
 }
 
 // Serializes a row for the client: JSON day columns become arrays, links added.
-function serialize(m: Maintenance) {
+async function serialize(m: Maintenance) {
   return {
     ...m,
     daysOfWeek: JSON.parse(m.daysOfWeek) as number[],
     daysOfMonth: JSON.parse(m.daysOfMonth) as number[],
-    monitorIds: linkedMonitorIds(m.id),
-    groupIds: linkedGroupIds(m.id),
+    monitorIds: await linkedMonitorIds(m.id),
+    groupIds: await linkedGroupIds(m.id),
   };
 }
 
-router.get("/", (_req, res) => {
-  const all = db
-    .select()
-    .from(maintenances)
-    .orderBy(desc(maintenances.active), asc(maintenances.title))
-    .all();
-  res.json(all.map(serialize));
-});
+router.get(
+  "/",
+  asyncHandler(async (_req, res) => {
+    const all = await db
+      .select()
+      .from(maintenances)
+      .orderBy(desc(maintenances.active), asc(maintenances.title))
+      .all();
+    res.json(await Promise.all(all.map(serialize)));
+  }),
+);
 
-router.get("/:id", (req, res) => {
-  const id = Number(req.params.id);
-  const m = db.select().from(maintenances).where(eq(maintenances.id, id)).get();
-  if (!m) {
-    res.status(404).json({ error: "Maintenance not found" });
-    return;
-  }
-  res.json(serialize(m));
-});
+router.get(
+  "/:id",
+  asyncHandler(async (req, res) => {
+    const id = Number(req.params.id);
+    const m = await db
+      .select()
+      .from(maintenances)
+      .where(eq(maintenances.id, id))
+      .get();
+    if (!m) {
+      res.status(404).json({ error: "Maintenance not found" });
+      return;
+    }
+    res.json(await serialize(m));
+  }),
+);
 
-router.post("/", (req, res) => {
-  const parsed = maintenanceSchema.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({ error: parsed.error.issues });
-    return;
-  }
-  const { monitorIds, groupIds, daysOfWeek, daysOfMonth, ...values } =
-    parsed.data;
-  const [created] = db
-    .insert(maintenances)
-    .values({
-      ...values,
-      startDate: values.startDate ?? null,
-      endDate: values.endDate ?? null,
-      startTime: values.startTime ?? null,
-      endTime: values.endTime ?? null,
-      daysOfWeek: JSON.stringify(daysOfWeek),
-      daysOfMonth: JSON.stringify(daysOfMonth),
-    })
-    .returning()
-    .all();
-  setLinks(created.id, monitorIds, groupIds);
-  syncMaintenanceNow();
-  res.status(201).json(serialize(created));
-});
+router.post(
+  "/",
+  asyncHandler(async (req, res) => {
+    const parsed = maintenanceSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: parsed.error.issues });
+      return;
+    }
+    const { monitorIds, groupIds, daysOfWeek, daysOfMonth, ...values } =
+      parsed.data;
+    const [created] = await db
+      .insert(maintenances)
+      .values({
+        ...values,
+        startDate: values.startDate ?? null,
+        endDate: values.endDate ?? null,
+        startTime: values.startTime ?? null,
+        endTime: values.endTime ?? null,
+        daysOfWeek: JSON.stringify(daysOfWeek),
+        daysOfMonth: JSON.stringify(daysOfMonth),
+      })
+      .returning()
+      .all();
+    await setLinks(created.id, monitorIds, groupIds);
+    await syncMaintenanceNow();
+    res.status(201).json(await serialize(created));
+  }),
+);
 
-router.put("/:id", (req, res) => {
-  const id = Number(req.params.id);
-  const existing = db
-    .select()
-    .from(maintenances)
-    .where(eq(maintenances.id, id))
-    .get();
-  if (!existing) {
-    res.status(404).json({ error: "Maintenance not found" });
-    return;
-  }
-  const parsed = maintenanceSchema.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({ error: parsed.error.issues });
-    return;
-  }
-  const { monitorIds, groupIds, daysOfWeek, daysOfMonth, ...values } =
-    parsed.data;
-  const [updated] = db
-    .update(maintenances)
-    .set({
-      ...values,
-      startDate: values.startDate ?? null,
-      endDate: values.endDate ?? null,
-      startTime: values.startTime ?? null,
-      endTime: values.endTime ?? null,
-      daysOfWeek: JSON.stringify(daysOfWeek),
-      daysOfMonth: JSON.stringify(daysOfMonth),
-    })
-    .where(eq(maintenances.id, id))
-    .returning()
-    .all();
-  setLinks(id, monitorIds, groupIds);
-  syncMaintenanceNow();
-  res.json(serialize(updated));
-});
+router.put(
+  "/:id",
+  asyncHandler(async (req, res) => {
+    const id = Number(req.params.id);
+    const existing = await db
+      .select()
+      .from(maintenances)
+      .where(eq(maintenances.id, id))
+      .get();
+    if (!existing) {
+      res.status(404).json({ error: "Maintenance not found" });
+      return;
+    }
+    const parsed = maintenanceSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: parsed.error.issues });
+      return;
+    }
+    const { monitorIds, groupIds, daysOfWeek, daysOfMonth, ...values } =
+      parsed.data;
+    const [updated] = await db
+      .update(maintenances)
+      .set({
+        ...values,
+        startDate: values.startDate ?? null,
+        endDate: values.endDate ?? null,
+        startTime: values.startTime ?? null,
+        endTime: values.endTime ?? null,
+        daysOfWeek: JSON.stringify(daysOfWeek),
+        daysOfMonth: JSON.stringify(daysOfMonth),
+      })
+      .where(eq(maintenances.id, id))
+      .returning()
+      .all();
+    await setLinks(id, monitorIds, groupIds);
+    await syncMaintenanceNow();
+    res.json(await serialize(updated));
+  }),
+);
 
 // Quick enable/disable toggle for the master switch.
-router.patch("/:id/toggle", (req, res) => {
-  const id = Number(req.params.id);
-  const existing = db
-    .select()
-    .from(maintenances)
-    .where(eq(maintenances.id, id))
-    .get();
-  if (!existing) {
-    res.status(404).json({ error: "Maintenance not found" });
-    return;
-  }
-  const [updated] = db
-    .update(maintenances)
-    .set({ active: !existing.active })
-    .where(eq(maintenances.id, id))
-    .returning()
-    .all();
-  syncMaintenanceNow();
-  res.json(serialize(updated));
-});
+router.patch(
+  "/:id/toggle",
+  asyncHandler(async (req, res) => {
+    const id = Number(req.params.id);
+    const existing = await db
+      .select()
+      .from(maintenances)
+      .where(eq(maintenances.id, id))
+      .get();
+    if (!existing) {
+      res.status(404).json({ error: "Maintenance not found" });
+      return;
+    }
+    const [updated] = await db
+      .update(maintenances)
+      .set({ active: !existing.active })
+      .where(eq(maintenances.id, id))
+      .returning()
+      .all();
+    await syncMaintenanceNow();
+    res.json(await serialize(updated));
+  }),
+);
 
-router.delete("/:id", (req, res) => {
-  const id = Number(req.params.id);
-  db.delete(maintenances).where(eq(maintenances.id, id)).run();
-  syncMaintenanceNow();
-  res.status(204).end();
-});
+router.delete(
+  "/:id",
+  asyncHandler(async (req, res) => {
+    const id = Number(req.params.id);
+    await db.delete(maintenances).where(eq(maintenances.id, id)).run();
+    await syncMaintenanceNow();
+    res.status(204).end();
+  }),
+);
 
 export default router;

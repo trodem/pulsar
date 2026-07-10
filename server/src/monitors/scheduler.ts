@@ -23,8 +23,8 @@ const MAINTENANCE_TICK_MS = 30_000;
 let underMaintenance = new Set<number>();
 let maintenanceTimer: NodeJS.Timeout | null = null;
 
-function lastKnownStatus(monitorId: number): number | null {
-  const row = db
+async function lastKnownStatus(monitorId: number): Promise<number | null> {
+  const row = await db
     .select({ status: heartbeats.status })
     .from(heartbeats)
     .where(eq(heartbeats.monitorId, monitorId))
@@ -58,7 +58,7 @@ async function executeCheck(monitor: Monitor): Promise<void> {
     const important = prev !== null && prev !== 3 && prev !== status;
     const time = Math.floor(Date.now() / 1000);
 
-    const [beat] = db
+    const [beat] = await db
       .insert(heartbeats)
       .values({
         monitorId: monitor.id,
@@ -90,13 +90,13 @@ async function executeCheck(monitor: Monitor): Promise<void> {
   }
 }
 
-function start(monitor: Monitor): void {
+async function start(monitor: Monitor): Promise<void> {
   stop(monitor.id);
   if (!monitor.active) return;
   const task: Task = {
     timer: null,
     running: false,
-    lastStatus: lastKnownStatus(monitor.id),
+    lastStatus: await lastKnownStatus(monitor.id),
   };
   tasks.set(monitor.id, task);
   // Run immediately, then on the configured interval.
@@ -115,9 +115,12 @@ function stop(monitorId: number): void {
 
 // Writes the single status=3 heartbeat that marks a monitor entering a
 // maintenance window (important=false, so no notification), and broadcasts it.
-function writeMaintenanceBeat(monitorId: number, task: Task): void {
+async function writeMaintenanceBeat(
+  monitorId: number,
+  task: Task,
+): Promise<void> {
   const time = Math.floor(Date.now() / 1000);
-  const [beat] = db
+  const [beat] = await db
     .insert(heartbeats)
     .values({
       monitorId,
@@ -136,8 +139,8 @@ function writeMaintenanceBeat(monitorId: number, task: Task): void {
 // Re-evaluates active maintenance windows and reconciles scheduler state:
 // entering monitors get one maintenance beat; exiting monitors resume with an
 // immediate check. Runs on a timer and on demand after config changes.
-function maintenanceTick(): void {
-  const next = monitorIdsUnderMaintenance();
+async function maintenanceTick(): Promise<void> {
+  const next = await monitorIdsUnderMaintenance();
   const prev = underMaintenance;
 
   const entered: number[] = [];
@@ -151,10 +154,10 @@ function maintenanceTick(): void {
 
   for (const id of entered) {
     const task = tasks.get(id);
-    if (task && task.lastStatus !== 3) writeMaintenanceBeat(id, task);
+    if (task && task.lastStatus !== 3) await writeMaintenanceBeat(id, task);
   }
   for (const id of exited) {
-    const monitor = db
+    const monitor = await db
       .select()
       .from(monitors)
       .where(eq(monitors.id, id))
@@ -164,18 +167,18 @@ function maintenanceTick(): void {
 }
 
 /** Forces an immediate maintenance re-evaluation (called after CRUD changes). */
-export function syncMaintenanceNow(): void {
-  maintenanceTick();
+export async function syncMaintenanceNow(): Promise<void> {
+  await maintenanceTick();
 }
 
 /** Restarts a single monitor's loop after create/update/toggle. */
-export function reschedule(monitorId: number): void {
-  const monitor = db
+export async function reschedule(monitorId: number): Promise<void> {
+  const monitor = await db
     .select()
     .from(monitors)
     .where(eq(monitors.id, monitorId))
     .get();
-  if (monitor) start(monitor);
+  if (monitor) await start(monitor);
   else stop(monitorId);
 }
 
@@ -184,22 +187,25 @@ export function unschedule(monitorId: number): void {
 }
 
 /** Loads every monitor from the DB and starts their loops. Called on boot. */
-export function startScheduler(): void {
+export async function startScheduler(): Promise<void> {
   // Seed the maintenance set before starting tasks so a monitor already inside
   // a window skips its initial check instead of writing a normal beat.
-  underMaintenance = monitorIdsUnderMaintenance();
+  underMaintenance = await monitorIdsUnderMaintenance();
 
-  const all = db.select().from(monitors).all();
-  for (const monitor of all) start(monitor);
+  const all = await db.select().from(monitors).all();
+  for (const monitor of all) await start(monitor);
 
   // Mark monitors that booted inside a window with their maintenance beat.
   for (const id of underMaintenance) {
     const task = tasks.get(id);
-    if (task && task.lastStatus !== 3) writeMaintenanceBeat(id, task);
+    if (task && task.lastStatus !== 3) await writeMaintenanceBeat(id, task);
   }
 
   if (maintenanceTimer) clearInterval(maintenanceTimer);
-  maintenanceTimer = setInterval(maintenanceTick, MAINTENANCE_TICK_MS);
+  maintenanceTimer = setInterval(
+    () => void maintenanceTick(),
+    MAINTENANCE_TICK_MS,
+  );
 
   console.log(`[scheduler] started ${all.length} monitor(s)`);
 }

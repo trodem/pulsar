@@ -2,8 +2,11 @@ import { and, desc, eq, gte } from "drizzle-orm";
 import { db } from "../db/index.js";
 import { heartbeats, type Heartbeat } from "../db/schema.js";
 
-export function recentHeartbeats(monitorId: number, limit = 50): Heartbeat[] {
-  const rows = db
+export async function recentHeartbeats(
+  monitorId: number,
+  limit = 50,
+): Promise<Heartbeat[]> {
+  const rows = await db
     .select()
     .from(heartbeats)
     .where(eq(heartbeats.monitorId, monitorId))
@@ -17,9 +20,12 @@ export function recentHeartbeats(monitorId: number, limit = 50): Heartbeat[] {
 // All heartbeats from the last `hours` hours, chronological. Used by the detail
 // view's adjustable heartbeat-bar scale (1..24h); unbounded by count so a wide
 // window returns every beat for the client to bin into buckets.
-export function heartbeatsSince(monitorId: number, hours: number): Heartbeat[] {
+export async function heartbeatsSince(
+  monitorId: number,
+  hours: number,
+): Promise<Heartbeat[]> {
   const since = Math.floor(Date.now() / 1000) - hours * 3600;
-  const rows = db
+  const rows = await db
     .select()
     .from(heartbeats)
     .where(
@@ -38,8 +44,8 @@ export interface MonitorStats {
   avgPing: number | null; // ms
 }
 
-export function monitorStats(monitorId: number): MonitorStats {
-  const latest = db
+export async function monitorStats(monitorId: number): Promise<MonitorStats> {
+  const latest = await db
     .select()
     .from(heartbeats)
     .where(eq(heartbeats.monitorId, monitorId))
@@ -48,7 +54,7 @@ export function monitorStats(monitorId: number): MonitorStats {
     .get();
 
   const since = Math.floor(Date.now() / 1000) - 24 * 3600;
-  const window = db
+  const window = await db
     .select({ status: heartbeats.status, ping: heartbeats.ping })
     .from(heartbeats)
     .where(

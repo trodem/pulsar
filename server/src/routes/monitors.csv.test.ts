@@ -14,7 +14,7 @@ import type { Server } from "node:http";
 const tmp = mkdtempSync(join(tmpdir(), "pulsar-csv-"));
 process.env.DB_PATH = join(tmp, "test.db");
 
-const { db, initSchema, sqlite } = await import("../db/index.js");
+const { db, initSchema, client } = await import("../db/index.js");
 const { monitors, groups, tags, monitorTags } = await import("../db/schema.js");
 const { eq } = await import("drizzle-orm");
 const express = (await import("express")).default;
@@ -24,10 +24,11 @@ let server: Server;
 let base: string;
 
 before(async () => {
-  initSchema();
+  await initSchema();
   // Seed one group + one monitor so export has something and dedup can be tested.
-  const [g] = db.insert(groups).values({ name: "IBS" }).returning().all();
-  db.insert(monitors)
+  const [g] = await db.insert(groups).values({ name: "IBS" }).returning().all();
+  await db
+    .insert(monitors)
     .values({ name: "Prisma PC", type: "http-ping", target: "http://host:8080", groupId: g.id })
     .run();
 
@@ -46,8 +47,16 @@ before(async () => {
 
 after(() => {
   server?.close();
-  sqlite.close();
-  rmSync(tmp, { recursive: true, force: true });
+  client.close();
+  // Best-effort temp cleanup: on Windows libSQL doesn't release the DB file
+  // handle synchronously on close(), so rm can hit EPERM. This dir is a
+  // throwaway under the OS temp path, so a failure here isn't worth failing the
+  // suite over — the OS reclaims it later.
+  try {
+    rmSync(tmp, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 });
+  } catch {
+    /* handle still held; leave the temp dir for the OS to reap */
+  }
 });
 
 describe("GET /export/monitors", () => {
@@ -88,16 +97,16 @@ describe("POST /import/monitors", () => {
     assert.deepEqual(await res.json(), { imported: 2, skipped: 0 });
 
     // The monitors exist...
-    const test = db.select().from(monitors).where(eq(monitors.name, "Test PC 1")).get();
+    const test = await db.select().from(monitors).where(eq(monitors.name, "Test PC 1")).get();
     assert.ok(test);
     // ...the new group was created and linked...
-    const grp = db.select().from(groups).where(eq(groups.name, "Typentest")).get();
+    const grp = await db.select().from(groups).where(eq(groups.name, "Typentest")).get();
     assert.ok(grp);
     assert.equal(test!.groupId, grp!.id);
     // ...and both tags were created and attached to Test PC 1.
-    const links = db.select().from(monitorTags).where(eq(monitorTags.monitorId, test!.id)).all();
+    const links = await db.select().from(monitorTags).where(eq(monitorTags.monitorId, test!.id)).all();
     assert.equal(links.length, 2);
-    assert.equal(db.select().from(tags).all().length, 2);
+    assert.equal((await db.select().from(tags).all()).length, 2);
   });
 
   it("skips monitors whose name already exists (no duplicates)", async () => {
@@ -110,17 +119,17 @@ describe("POST /import/monitors", () => {
     assert.equal(res.status, 200);
     assert.deepEqual(await res.json(), { imported: 1, skipped: 1 });
     // Only one "Prisma PC" exists — the duplicate was not inserted.
-    assert.equal(db.select().from(monitors).where(eq(monitors.name, "Prisma PC")).all().length, 1);
+    assert.equal((await db.select().from(monitors).where(eq(monitors.name, "Prisma PC")).all()).length, 1);
   });
 
   it("reuses an existing tag instead of duplicating it", async () => {
-    const before = db.select().from(tags).all().length;
+    const before = (await db.select().from(tags).all()).length;
     const res = await post(
       "monitor_name,monitor_type,url,group,tag\nWithSharedTag,ping,10.0.0.5,,M-IBS",
     );
     assert.equal(res.status, 200);
     // "M-IBS" already exists from the first import — no new tag row.
-    assert.equal(db.select().from(tags).all().length, before);
+    assert.equal((await db.select().from(tags).all()).length, before);
   });
 
   it("rejects a malformed file with a clear 400 error", async () => {

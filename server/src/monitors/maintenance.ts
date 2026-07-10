@@ -79,8 +79,10 @@ function isActiveNow(m: Maintenance, now: Date): boolean {
  * live from the DB (the fleet is small); called on each scheduler maintenance
  * tick and whenever the maintenance config changes.
  */
-export function monitorIdsUnderMaintenance(now = new Date()): Set<number> {
-  const active = db
+export async function monitorIdsUnderMaintenance(
+  now = new Date(),
+): Promise<Set<number>> {
+  const active = await db
     .select()
     .from(maintenances)
     .where(eq(maintenances.active, true))
@@ -90,26 +92,29 @@ export function monitorIdsUnderMaintenance(now = new Date()): Set<number> {
   for (const m of active) {
     if (!isActiveNow(m, now)) continue;
 
-    for (const r of db
+    const directMonitors = await db
       .select({ id: maintenanceMonitors.monitorId })
       .from(maintenanceMonitors)
       .where(eq(maintenanceMonitors.maintenanceId, m.id))
-      .all()) {
+      .all();
+    for (const r of directMonitors) {
       result.add(r.id);
     }
 
-    const groupIds = db
-      .select({ id: maintenanceGroups.groupId })
-      .from(maintenanceGroups)
-      .where(eq(maintenanceGroups.maintenanceId, m.id))
-      .all()
-      .map((r) => r.id);
+    const groupIds = (
+      await db
+        .select({ id: maintenanceGroups.groupId })
+        .from(maintenanceGroups)
+        .where(eq(maintenanceGroups.maintenanceId, m.id))
+        .all()
+    ).map((r) => r.id);
     if (groupIds.length > 0) {
-      for (const r of db
+      const groupMonitors = await db
         .select({ id: monitors.id })
         .from(monitors)
         .where(inArray(monitors.groupId, groupIds))
-        .all()) {
+        .all();
+      for (const r of groupMonitors) {
         result.add(r.id);
       }
     }

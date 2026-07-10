@@ -19,7 +19,7 @@ built with an Express + TypeScript backend, a Vue 3 frontend, and a SQLite datab
 | Layer     | Tech                                                        |
 | --------- | ----------------------------------------------------------- |
 | Backend   | Node.js, Express, TypeScript, Socket.IO                     |
-| Database  | SQLite via `better-sqlite3` + Drizzle ORM                   |
+| Database  | SQLite via libSQL (`@libsql/client`) + Drizzle ORM          |
 | Scheduler | In-process per-monitor timers                               |
 | Frontend  | Vue 3, Vite, Pinia, Vue Router, `socket.io-client`, TS      |
 

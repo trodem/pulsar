@@ -3,6 +3,7 @@ import { asc, eq } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "../db/index.js";
 import { tags } from "../db/schema.js";
+import { asyncHandler } from "../http.js";
 
 const router = Router();
 
@@ -15,55 +16,75 @@ const tagSchema = z.object({
     .default("#4f9dff"),
 });
 
-router.get("/", (_req, res) => {
-  const all = db.select().from(tags).orderBy(asc(tags.name)).all();
-  res.json(all);
-});
+router.get(
+  "/",
+  asyncHandler(async (_req, res) => {
+    const all = await db.select().from(tags).orderBy(asc(tags.name)).all();
+    res.json(all);
+  }),
+);
 
-router.post("/", (req, res) => {
-  const parsed = tagSchema.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({ error: parsed.error.issues });
-    return;
-  }
-  try {
-    const [created] = db.insert(tags).values(parsed.data).returning().all();
-    res.status(201).json(created);
-  } catch (err) {
-    res.status(409).json({ error: duplicateOr(err, "Tag name already exists") });
-  }
-});
-
-router.put("/:id", (req, res) => {
-  const id = Number(req.params.id);
-  const parsed = tagSchema.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({ error: parsed.error.issues });
-    return;
-  }
-  try {
-    const [updated] = db
-      .update(tags)
-      .set(parsed.data)
-      .where(eq(tags.id, id))
-      .returning()
-      .all();
-    if (!updated) {
-      res.status(404).json({ error: "Tag not found" });
+router.post(
+  "/",
+  asyncHandler(async (req, res) => {
+    const parsed = tagSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: parsed.error.issues });
       return;
     }
-    res.json(updated);
-  } catch (err) {
-    res.status(409).json({ error: duplicateOr(err, "Tag name already exists") });
-  }
-});
+    try {
+      const [created] = await db
+        .insert(tags)
+        .values(parsed.data)
+        .returning()
+        .all();
+      res.status(201).json(created);
+    } catch (err) {
+      res
+        .status(409)
+        .json({ error: duplicateOr(err, "Tag name already exists") });
+    }
+  }),
+);
+
+router.put(
+  "/:id",
+  asyncHandler(async (req, res) => {
+    const id = Number(req.params.id);
+    const parsed = tagSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: parsed.error.issues });
+      return;
+    }
+    try {
+      const [updated] = await db
+        .update(tags)
+        .set(parsed.data)
+        .where(eq(tags.id, id))
+        .returning()
+        .all();
+      if (!updated) {
+        res.status(404).json({ error: "Tag not found" });
+        return;
+      }
+      res.json(updated);
+    } catch (err) {
+      res
+        .status(409)
+        .json({ error: duplicateOr(err, "Tag name already exists") });
+    }
+  }),
+);
 
 // Deleting a tag also removes its monitor_tags links (ON DELETE CASCADE).
-router.delete("/:id", (req, res) => {
-  const id = Number(req.params.id);
-  db.delete(tags).where(eq(tags.id, id)).run();
-  res.status(204).end();
-});
+router.delete(
+  "/:id",
+  asyncHandler(async (req, res) => {
+    const id = Number(req.params.id);
+    await db.delete(tags).where(eq(tags.id, id)).run();
+    res.status(204).end();
+  }),
+);
 
 // Turns a UNIQUE-constraint violation into a friendly message, rethrows others.
 function duplicateOr(err: unknown, message: string): string {

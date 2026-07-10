@@ -67,7 +67,7 @@ async function dispatch(n: Notification, ctx: NotifyContext): Promise<void> {
  * Fires every active notification linked to the monitor. Called on state change.
  */
 export async function notifyForMonitor(ctx: NotifyContext): Promise<void> {
-  const linked = db
+  const linked = await db
     .select({ notification: notifications })
     .from(monitorNotifications)
     .innerJoin(

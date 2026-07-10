@@ -1,7 +1,8 @@
-import Database from "better-sqlite3";
-import { drizzle } from "drizzle-orm/better-sqlite3";
+import { createClient } from "@libsql/client";
+import { drizzle } from "drizzle-orm/libsql";
 import { existsSync, mkdirSync } from "node:fs";
 import { dirname, resolve } from "node:path";
+import { pathToFileURL } from "node:url";
 import * as schema from "./schema.js";
 
 const dbPath = resolve(process.env.DB_PATH || "./data/uptime.db");
@@ -10,18 +11,25 @@ const dbPath = resolve(process.env.DB_PATH || "./data/uptime.db");
 const dir = dirname(dbPath);
 if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
 
-const sqlite = new Database(dbPath);
-sqlite.pragma("journal_mode = WAL");
-sqlite.pragma("foreign_keys = ON");
+// libSQL client over the local file. Ships prebuilt native bindings (no
+// node-gyp/compilation), and its Drizzle driver is async — every query below is
+// awaited. `pathToFileURL` yields a proper `file://` URL that works cross-platform
+// (including Windows drive letters).
+const client = createClient({ url: pathToFileURL(dbPath).href });
 
-export const db = drizzle(sqlite, { schema });
+export const db = drizzle(client, { schema });
 
 /**
  * Creates all tables if they don't exist yet. Kept idempotent so the app can
- * boot with a fresh SQLite file without a separate migration step.
+ * boot with a fresh SQLite file without a separate migration step. Also enables
+ * foreign-key enforcement (off by default in SQLite) so the ON DELETE CASCADE /
+ * SET NULL rules in the schema actually fire.
  */
-export function initSchema(): void {
-  sqlite.exec(`
+export async function initSchema(): Promise<void> {
+  await client.execute("PRAGMA journal_mode = WAL");
+  await client.execute("PRAGMA foreign_keys = ON");
+
+  await client.executeMultiple(`
     CREATE TABLE IF NOT EXISTS users (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       username TEXT NOT NULL UNIQUE,
@@ -128,27 +136,25 @@ export function initSchema(): void {
   // Migrate pre-existing databases whose monitors table predates the groups
   // feature: add the group_id column if it's missing (CREATE TABLE IF NOT
   // EXISTS above is a no-op once the table exists).
-  if (!columnExists("monitors", "group_id")) {
-    sqlite.exec(
+  if (!(await columnExists("monitors", "group_id"))) {
+    await client.execute(
       "ALTER TABLE monitors ADD COLUMN group_id INTEGER REFERENCES groups(id) ON DELETE SET NULL;",
     );
   }
 
   // Migrate databases that predate drag-and-drop reordering: add the position
   // column (defaults to 0, so existing monitors keep their id order until moved).
-  if (!columnExists("monitors", "position")) {
-    sqlite.exec(
+  if (!(await columnExists("monitors", "position"))) {
+    await client.execute(
       "ALTER TABLE monitors ADD COLUMN position INTEGER NOT NULL DEFAULT 0;",
     );
   }
 }
 
 /** True if `table` already has a column named `column`. */
-function columnExists(table: string, column: string): boolean {
-  const cols = sqlite
-    .prepare(`PRAGMA table_info(${table})`)
-    .all() as { name: string }[];
-  return cols.some((c) => c.name === column);
+async function columnExists(table: string, column: string): Promise<boolean> {
+  const res = await client.execute(`PRAGMA table_info(${table})`);
+  return res.rows.some((c) => c.name === column);
 }
 
-export { sqlite };
+export { client };

@@ -4,6 +4,7 @@ import { z } from "zod";
 import { db } from "../db/index.js";
 import { notifications } from "../db/schema.js";
 import { testNotification } from "../notifications/index.js";
+import { asyncHandler } from "../http.js";
 
 const router = Router();
 
@@ -14,65 +15,77 @@ const notificationSchema = z.object({
   active: z.boolean().default(true),
 });
 
-router.get("/", (_req, res) => {
-  const all = db.select().from(notifications).all();
-  res.json(
-    all.map((n) => ({
-      ...n,
-      config: safeParse(n.config),
-    })),
-  );
-});
+router.get(
+  "/",
+  asyncHandler(async (_req, res) => {
+    const all = await db.select().from(notifications).all();
+    res.json(
+      all.map((n) => ({
+        ...n,
+        config: safeParse(n.config),
+      })),
+    );
+  }),
+);
 
-router.post("/", (req, res) => {
-  const parsed = notificationSchema.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({ error: parsed.error.issues });
-    return;
-  }
-  const [created] = db
-    .insert(notifications)
-    .values({
-      name: parsed.data.name,
-      type: parsed.data.type,
-      config: JSON.stringify(parsed.data.config),
-      active: parsed.data.active,
-    })
-    .returning()
-    .all();
-  res.status(201).json({ ...created, config: safeParse(created.config) });
-});
+router.post(
+  "/",
+  asyncHandler(async (req, res) => {
+    const parsed = notificationSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: parsed.error.issues });
+      return;
+    }
+    const [created] = await db
+      .insert(notifications)
+      .values({
+        name: parsed.data.name,
+        type: parsed.data.type,
+        config: JSON.stringify(parsed.data.config),
+        active: parsed.data.active,
+      })
+      .returning()
+      .all();
+    res.status(201).json({ ...created, config: safeParse(created.config) });
+  }),
+);
 
-router.put("/:id", (req, res) => {
-  const id = Number(req.params.id);
-  const parsed = notificationSchema.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({ error: parsed.error.issues });
-    return;
-  }
-  const [updated] = db
-    .update(notifications)
-    .set({
-      name: parsed.data.name,
-      type: parsed.data.type,
-      config: JSON.stringify(parsed.data.config),
-      active: parsed.data.active,
-    })
-    .where(eq(notifications.id, id))
-    .returning()
-    .all();
-  if (!updated) {
-    res.status(404).json({ error: "Notification not found" });
-    return;
-  }
-  res.json({ ...updated, config: safeParse(updated.config) });
-});
+router.put(
+  "/:id",
+  asyncHandler(async (req, res) => {
+    const id = Number(req.params.id);
+    const parsed = notificationSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: parsed.error.issues });
+      return;
+    }
+    const [updated] = await db
+      .update(notifications)
+      .set({
+        name: parsed.data.name,
+        type: parsed.data.type,
+        config: JSON.stringify(parsed.data.config),
+        active: parsed.data.active,
+      })
+      .where(eq(notifications.id, id))
+      .returning()
+      .all();
+    if (!updated) {
+      res.status(404).json({ error: "Notification not found" });
+      return;
+    }
+    res.json({ ...updated, config: safeParse(updated.config) });
+  }),
+);
 
-router.delete("/:id", (req, res) => {
-  const id = Number(req.params.id);
-  db.delete(notifications).where(eq(notifications.id, id)).run();
-  res.status(204).end();
-});
+router.delete(
+  "/:id",
+  asyncHandler(async (req, res) => {
+    const id = Number(req.params.id);
+    await db.delete(notifications).where(eq(notifications.id, id)).run();
+    res.status(204).end();
+  }),
+);
 
 // Send a test message using a provided (unsaved) config.
 router.post("/test", async (req, res) => {

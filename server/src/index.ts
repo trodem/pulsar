@@ -16,7 +16,7 @@ import maintenanceRoutes from "./routes/maintenances.js";
 import { initSocket } from "./socket.js";
 import { startScheduler } from "./monitors/scheduler.js";
 
-initSchema();
+await initSchema();
 
 const app = express();
 app.use(cors({ origin: config.clientOrigin, credentials: true }));
@@ -42,10 +42,27 @@ if (existsSync(publicDir)) {
   console.log(`[server] serving client from ${publicDir}`);
 }
 
+// Catch-all error handler: forwards rejected async handlers (see asyncHandler)
+// to a 500 instead of hanging the request. Must be registered after the routes.
+app.use(
+  (
+    err: unknown,
+    _req: express.Request,
+    res: express.Response,
+    _next: express.NextFunction,
+  ) => {
+    console.error("[api] unhandled error:", err);
+    if (res.headersSent) return;
+    res.status(500).json({ error: "Internal server error" });
+  },
+);
+
 const httpServer = createServer(app);
 initSocket(httpServer);
 
 httpServer.listen(config.port, () => {
   console.log(`[server] API + WS listening on http://localhost:${config.port}`);
-  startScheduler();
+  startScheduler().catch((err) =>
+    console.error("[scheduler] failed to start:", err),
+  );
 });

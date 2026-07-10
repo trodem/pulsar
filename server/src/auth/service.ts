@@ -11,13 +11,13 @@ export interface JwtPayload {
 }
 
 export async function countUsers(): Promise<number> {
-  const rows = db.select({ id: users.id }).from(users).all();
+  const rows = await db.select({ id: users.id }).from(users).all();
   return rows.length;
 }
 
 export async function createUser(username: string, password: string) {
   const passwordHash = await bcrypt.hash(password, 10);
-  const [user] = db
+  const [user] = await db
     .insert(users)
     .values({ username, passwordHash })
     .returning()
@@ -26,7 +26,11 @@ export async function createUser(username: string, password: string) {
 }
 
 export async function verifyCredentials(username: string, password: string) {
-  const user = db.select().from(users).where(eq(users.username, username)).get();
+  const user = await db
+    .select()
+    .from(users)
+    .where(eq(users.username, username))
+    .get();
   if (!user) return null;
   const ok = await bcrypt.compare(password, user.passwordHash);
   return ok ? user : null;
