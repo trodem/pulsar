@@ -240,6 +240,82 @@ function openRemoteDesktop(m: Monitor) {
   window.location.href = `pulsar-rdp:${host}`;
 }
 
+// --- CSV export / import (heartbeat sessions) --------------------------
+
+// Hidden <input type="file"> driven by the "Import CSV" button.
+const csvInput = ref<HTMLInputElement | null>(null);
+const exporting = ref(false);
+const importing = ref(false);
+// Transient banner shown under the toolbar after an export/import.
+const csvNotice = ref<{ kind: "ok" | "error"; text: string } | null>(null);
+
+function flashNotice(kind: "ok" | "error", text: string) {
+  csvNotice.value = { kind, text };
+  // Auto-dismiss success after a few seconds; leave errors up to read.
+  if (kind === "ok") setTimeout(() => (csvNotice.value = null), 4000);
+}
+
+async function exportCsv() {
+  exporting.value = true;
+  csvNotice.value = null;
+  try {
+    await store.exportMonitorsCsv();
+    flashNotice("ok", "Monitors exported to CSV.");
+  } catch (e: any) {
+    flashNotice("error", e?.response?.data?.error ?? "Export failed.");
+  } finally {
+    exporting.value = false;
+  }
+}
+
+function pickCsv() {
+  csvNotice.value = null;
+  csvInput.value?.click();
+}
+
+// Turns the selected file into CSV text. A .xlsx/.xls workbook is parsed in the
+// browser (SheetJS, lazy-loaded) and its first sheet is converted to CSV, so the
+// server only ever receives the same CSV format. Anything else is read as text.
+async function fileToCsv(file: File): Promise<string> {
+  const isExcel =
+    /\.(xlsx|xls)$/i.test(file.name) ||
+    file.type.includes("spreadsheet") ||
+    file.type.includes("ms-excel");
+  if (!isExcel) return file.text();
+
+  const XLSX = await import("xlsx");
+  const wb = XLSX.read(await file.arrayBuffer(), { type: "array" });
+  const sheet = wb.Sheets[wb.SheetNames[0]];
+  if (!sheet) throw new Error("The Excel file has no sheets.");
+  return XLSX.utils.sheet_to_csv(sheet);
+}
+
+async function onCsvSelected(e: Event) {
+  const input = e.target as HTMLInputElement;
+  const file = input.files?.[0];
+  // Reset so selecting the same file again still fires @change.
+  input.value = "";
+  if (!file) return;
+
+  importing.value = true;
+  try {
+    const text = await fileToCsv(file);
+    const { imported, skipped } = await store.importMonitorsCsv(text);
+    const skippedNote = skipped ? ` (${skipped} skipped — name already exists)` : "";
+    flashNotice(
+      "ok",
+      `Imported ${imported} monitor${imported === 1 ? "" : "s"}${skippedNote}.`,
+    );
+  } catch (e: any) {
+    flashNotice(
+      "error",
+      e?.response?.data?.error ?? e?.message ?? "Import failed. Check the file format.",
+    );
+  } finally {
+    importing.value = false;
+  }
+}
+
 async function showLogFiles(m: Monitor) {
   logModal.value = {
     name: m.name,
@@ -296,8 +372,38 @@ async function showLogFiles(m: Monitor) {
           ✕
         </button>
       </div>
+      <button
+        class="btn btn-sm"
+        title="Export monitors (with groups and tags) to a CSV file"
+        :disabled="exporting"
+        @click="exportCsv"
+      >
+        {{ exporting ? "⏳ Exporting…" : "⬇ Export CSV" }}
+      </button>
+      <button
+        class="btn btn-sm"
+        title="Import monitors from a CSV or Excel file"
+        :disabled="importing"
+        @click="pickCsv"
+      >
+        {{ importing ? "⏳ Importing…" : "⬆ Import CSV" }}
+      </button>
+      <input
+        ref="csvInput"
+        type="file"
+        accept=".csv,text/csv,.txt,.xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
+        style="display: none"
+        @change="onCsvSelected"
+      />
       <button class="btn btn-primary btn-sm" @click="openNew">+ New monitor</button>
     </div>
+  </div>
+
+  <div v-if="csvNotice" class="csv-notice" :class="csvNotice.kind">
+    <span>{{ csvNotice.text }}</span>
+    <button type="button" class="csv-notice-close" title="Dismiss" @click="csvNotice = null">
+      ✕
+    </button>
   </div>
 
   <div v-if="store.monitors.length === 0" class="empty">

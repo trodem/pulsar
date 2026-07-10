@@ -92,6 +92,37 @@ export const useMonitorStore = defineStore("monitors", () => {
     return data;
   }
 
+  // Downloads all monitors (with their group and tags) as a CSV file. Fetched as
+  // a blob (so the JWT is attached) and handed to the browser as a download.
+  async function exportMonitorsCsv() {
+    const { data } = await api.get("/monitors/export/monitors", {
+      responseType: "blob",
+    });
+    const stamp = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+    const url = URL.createObjectURL(data as Blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `pulsar-monitors-${stamp}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  }
+
+  // Uploads a CSV file of monitors. Returns how many were imported and skipped;
+  // the server validates the format and rejects the whole file on any error.
+  async function importMonitorsCsv(
+    csvText: string,
+  ): Promise<{ imported: number; skipped: number }> {
+    const { data } = await api.post<{ imported: number; skipped: number }>(
+      "/monitors/import/monitors",
+      csvText,
+      { headers: { "Content-Type": "text/csv" } },
+    );
+    await fetchAll();
+    return data;
+  }
+
   // Apply a live heartbeat pushed over the websocket to local state.
   function applyHeartbeat(monitorId: number, hb: Heartbeat) {
     const m = monitors.value.find((x) => x.id === monitorId);
@@ -146,6 +177,8 @@ export const useMonitorStore = defineStore("monitors", () => {
     checkUsers,
     restartProgram,
     logFiles,
+    exportMonitorsCsv,
+    importMonitorsCsv,
     bindSocket,
   };
 });

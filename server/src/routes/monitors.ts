@@ -1,14 +1,21 @@
-import { Router } from "express";
-import { eq, inArray } from "drizzle-orm";
+import { Router, text } from "express";
+import { asc, eq, inArray } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "../db/index.js";
 import {
+  groups,
   monitorNotifications,
   monitorTags,
   monitors,
   tags,
   type Tag,
 } from "../db/schema.js";
+import {
+  CsvError,
+  monitorsToCsv,
+  parseMonitorsCsv,
+  type MonitorCsv,
+} from "./../monitors/csv.js";
 import {
   heartbeatsSince,
   monitorStats,
@@ -128,6 +135,133 @@ router.get("/", (_req, res) => {
   }));
   res.json(data);
 });
+
+// Exports every monitor (with its group name and tag names) as a CSV download.
+// Registered before the `/:id` routes so "export" isn't captured as a monitor id.
+router.get("/export/monitors", (_req, res) => {
+  const groupNameById = new Map(
+    db.select({ id: groups.id, name: groups.name }).from(groups).all()
+      .map((g) => [g.id, g.name] as const),
+  );
+
+  const all = db.select().from(monitors).orderBy(asc(monitors.id)).all();
+  const tagMap = tagsByMonitor(all.map((m) => m.id));
+
+  const rows: MonitorCsv[] = all.map((m) => ({
+    name: m.name,
+    type: m.type as MonitorCsv["type"],
+    target: m.target,
+    group: m.groupId != null ? groupNameById.get(m.groupId) ?? null : null,
+    tags: (tagMap.get(m.id) ?? []).map((t) => t.name),
+  }));
+
+  const stamp = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+  res.setHeader("Content-Type", "text/csv; charset=utf-8");
+  res.setHeader(
+    "Content-Disposition",
+    `attachment; filename="pulsar-monitors-${stamp}.csv"`,
+  );
+  res.send(monitorsToCsv(rows));
+});
+
+// Imports monitors from an uploaded CSV. The client posts the raw file text
+// (Content-Type text/csv). Validates the format, then creates each monitor,
+// resolving its group and tags by name (creating any that don't exist yet).
+// Monitors whose name already exists are skipped so re-importing is safe.
+router.post(
+  "/import/monitors",
+  text({ type: ["text/csv", "text/plain"], limit: "20mb" }),
+  (req, res) => {
+    const csv = typeof req.body === "string" ? req.body : "";
+    let rows;
+    try {
+      rows = parseMonitorsCsv(csv);
+    } catch (err) {
+      if (err instanceof CsvError) {
+        res.status(400).json({ error: err.message });
+        return;
+      }
+      throw err;
+    }
+
+    const existingNames = new Set(
+      db.select({ name: monitors.name }).from(monitors).all().map((m) => m.name),
+    );
+
+    // Resolve a group name to its id, creating the group on first use. Cached so
+    // several monitors sharing a group don't each re-query/insert it.
+    const groupCache = new Map<string, number>();
+    function groupIdFor(name: string): number {
+      const key = name.toLowerCase();
+      const cached = groupCache.get(key);
+      if (cached != null) return cached;
+      const found = db.select().from(groups).all().find(
+        (g) => g.name.toLowerCase() === key,
+      );
+      const id = found
+        ? found.id
+        : db.insert(groups).values({ name }).returning().all()[0].id;
+      groupCache.set(key, id);
+      return id;
+    }
+
+    // Resolve a tag name to its id, creating the tag (with the default color) on
+    // first use. Cached for the same reason as groups.
+    const tagCache = new Map<string, number>();
+    function tagIdFor(name: string): number {
+      const key = name.toLowerCase();
+      const cached = tagCache.get(key);
+      if (cached != null) return cached;
+      const found = db.select().from(tags).all().find(
+        (t) => t.name.toLowerCase() === key,
+      );
+      const id = found
+        ? found.id
+        : db.insert(tags).values({ name }).returning().all()[0].id;
+      tagCache.set(key, id);
+      return id;
+    }
+
+    const created: number[] = [];
+    let skipped = 0;
+
+    db.transaction(() => {
+      for (const r of rows) {
+        if (existingNames.has(r.name)) {
+          skipped++;
+          continue;
+        }
+        existingNames.add(r.name);
+
+        // Only name/type/target/group/tags come from the CSV; every other
+        // monitor setting falls back to the schema defaults.
+        const groupId = r.group != null ? groupIdFor(r.group) : null;
+        const [monitor] = db
+          .insert(monitors)
+          .values({
+            name: r.name,
+            type: r.type,
+            target: r.target,
+            groupId,
+          })
+          .returning()
+          .all();
+
+        for (const tagName of r.tags) {
+          db.insert(monitorTags)
+            .values({ monitorId: monitor.id, tagId: tagIdFor(tagName) })
+            .run();
+        }
+        created.push(monitor.id);
+      }
+    });
+
+    // Start the scheduler for each newly created (active) monitor.
+    for (const id of created) reschedule(id);
+
+    res.json({ imported: created.length, skipped });
+  },
+);
 
 router.get("/:id", (req, res) => {
   const id = Number(req.params.id);
