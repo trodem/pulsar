@@ -90,6 +90,13 @@ export async function initSchema(): Promise<void> {
     CREATE UNIQUE INDEX IF NOT EXISTS idx_monitor_notifications
       ON monitor_notifications (monitor_id, notification_id);
 
+    CREATE TABLE IF NOT EXISTS notification_groups (
+      notification_id INTEGER NOT NULL REFERENCES notifications(id) ON DELETE CASCADE,
+      group_id INTEGER NOT NULL REFERENCES groups(id) ON DELETE CASCADE
+    );
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_notification_groups
+      ON notification_groups (notification_id, group_id);
+
     CREATE TABLE IF NOT EXISTS tags (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       name TEXT NOT NULL UNIQUE,

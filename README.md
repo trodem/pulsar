@@ -10,7 +10,8 @@ built with an Express + TypeScript backend, a Vue 3 frontend, and a SQLite datab
 - Per-monitor interval, timeout, retries, and accepted status codes
 - Live dashboard over **WebSocket** (Socket.IO): heartbeat bars, 24h uptime %, latency
 - History / event log of up⇄down transitions
-- **Notifications** on state change: Webhook and Telegram (with test button)
+- **Notifications** on state change: Webhook, Telegram, and Microsoft Teams
+  (with test button), each targetable at individual monitors and/or whole groups
 - Single-admin **authentication** (JWT + bcrypt), first-run setup wizard
 - Zero-config **SQLite** storage (tables auto-created on boot)
 

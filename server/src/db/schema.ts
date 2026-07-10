@@ -78,7 +78,7 @@ export const heartbeats = sqliteTable("heartbeats", {
 export const notifications = sqliteTable("notifications", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   name: text("name").notNull(),
-  // "webhook" | "telegram"
+  // "webhook" | "telegram" | "teams"
   type: text("type").notNull(),
   // JSON blob with type-specific config (url, botToken, chatId, ...).
   config: text("config").notNull().default("{}"),
@@ -88,7 +88,8 @@ export const notifications = sqliteTable("notifications", {
     .default(sql`(unixepoch())`),
 });
 
-// Join table: which notifications fire for which monitor.
+// Join table: which notifications fire for which monitor. Also editable from
+// the notification side (its "Applies to" monitor picker).
 export const monitorNotifications = sqliteTable("monitor_notifications", {
   monitorId: integer("monitor_id")
     .notNull()
@@ -96,6 +97,18 @@ export const monitorNotifications = sqliteTable("monitor_notifications", {
   notificationId: integer("notification_id")
     .notNull()
     .references(() => notifications.id, { onDelete: "cascade" }),
+});
+
+// Join table: notifications attached to a whole group. A notification fires for
+// a monitor if it is linked directly (monitor_notifications) OR to the monitor's
+// group here — so a new monitor added to the group is covered automatically.
+export const notificationGroups = sqliteTable("notification_groups", {
+  notificationId: integer("notification_id")
+    .notNull()
+    .references(() => notifications.id, { onDelete: "cascade" }),
+  groupId: integer("group_id")
+    .notNull()
+    .references(() => groups.id, { onDelete: "cascade" }),
 });
 
 // A colored label that can be attached to many monitors (many-to-many).

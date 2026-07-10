@@ -66,9 +66,12 @@ export interface LogFileEntry {
 export interface Notification {
   id: number;
   name: string;
-  type: "webhook" | "telegram";
+  type: "webhook" | "telegram" | "teams";
   config: Record<string, any>;
   active: boolean;
+  // Targets this notification fires for: individual monitors and/or whole groups.
+  monitorIds: number[];
+  groupIds: number[];
 }
 
 export type MaintenanceStrategy = "single" | "daily" | "weekly" | "monthly";
