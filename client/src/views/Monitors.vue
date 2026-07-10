@@ -227,6 +227,114 @@ function openWebPage(m: Monitor) {
   window.open(m.target, "_blank", "noopener");
 }
 
+// --- Drag-and-drop card reordering (card view only) --------------------
+// The card being dragged and the card currently hovered as a drop target (both
+// monitor ids), plus the section header hovered as a drop target (group id, or
+// "ungrouped"). All null when no drag is in progress. A drop onto another
+// group's card — or onto a group header — moves the monitor into that group.
+const dragId = ref<number | null>(null);
+const dragOverId = ref<number | null>(null);
+const dragOverSection = ref<string | null>(null);
+
+// Builds the reorder payload from a flat, already-ordered monitor array,
+// overriding the dragged monitor's group so the move is persisted.
+function reorderPayload(arr: Monitor[], draggedId: number, groupId: number | null) {
+  return arr.map((m) => ({
+    id: m.id,
+    groupId: m.id === draggedId ? groupId : m.groupId,
+  }));
+}
+
+function onDragStart(m: Monitor, e: DragEvent) {
+  dragId.value = m.id;
+  // Firefox only starts a drag when some data is set on the transfer.
+  e.dataTransfer?.setData("text/plain", String(m.id));
+  if (e.dataTransfer) e.dataTransfer.effectAllowed = "move";
+}
+
+// Highlight any card (other than the one being dragged) as a valid drop target.
+function onDragOver(target: Monitor, e: DragEvent) {
+  if (dragId.value == null || dragId.value === target.id) return;
+  e.preventDefault();
+  if (e.dataTransfer) e.dataTransfer.dropEffect = "move";
+  dragOverId.value = target.id;
+  dragOverSection.value = null;
+}
+
+function onDragLeave(target: Monitor) {
+  if (dragOverId.value === target.id) dragOverId.value = null;
+}
+
+// Drop the dragged card just before the target card. If the target is in another
+// group the monitor moves into it. Persists the new order + group membership.
+function onDrop(target: Monitor) {
+  const id = dragId.value;
+  dragOverId.value = null;
+  dragId.value = null;
+  if (id == null || id === target.id) return;
+  const dragged = store.monitors.find((m) => m.id === id);
+  if (!dragged) return;
+
+  const arr = store.monitors.filter((m) => m.id !== id);
+  const insertAt = arr.findIndex((m) => m.id === target.id);
+  if (insertAt < 0) return;
+  arr.splice(insertAt, 0, dragged);
+  store.reorder(reorderPayload(arr, id, target.groupId));
+}
+
+// A group header is a drop target too, so a monitor can be moved into a group
+// that has no visible cards (or dropped at the end of a group). Appends the
+// dragged monitor after the last monitor already in that group.
+function onSectionDragOver(sectionId: number | null, e: DragEvent) {
+  if (dragId.value == null) return;
+  e.preventDefault();
+  if (e.dataTransfer) e.dataTransfer.dropEffect = "move";
+  dragOverSection.value = sectionKey(sectionId);
+  dragOverId.value = null;
+}
+
+function onSectionDragLeave(sectionId: number | null) {
+  if (dragOverSection.value === sectionKey(sectionId)) dragOverSection.value = null;
+}
+
+function onSectionDrop(sectionId: number | null) {
+  const id = dragId.value;
+  dragOverSection.value = null;
+  dragId.value = null;
+  if (id == null) return;
+  const dragged = store.monitors.find((m) => m.id === id);
+  if (!dragged) return;
+
+  const arr = store.monitors.filter((m) => m.id !== id);
+  // Insert after the last monitor already in the target group; if the group is
+  // empty, fall back to the end of the list.
+  let lastIdx = -1;
+  arr.forEach((m, i) => {
+    if (m.groupId === sectionId) lastIdx = i;
+  });
+  arr.splice(lastIdx + 1, 0, dragged);
+  store.reorder(reorderPayload(arr, id, sectionId));
+}
+
+function onDragEnd() {
+  dragId.value = null;
+  dragOverId.value = null;
+  dragOverSection.value = null;
+}
+
+// While dragging, groups (and "Ungrouped") that currently have no visible cards
+// aren't rendered as sections, so there'd be no way to drop a monitor into them.
+// Surface them as slim drop zones for the duration of the drag.
+const emptyDragGroups = computed(() => {
+  if (dragId.value == null) return [];
+  const shown = new Set<number | null>(sections.value.map((s) => s.id));
+  const out: { id: number | null; name: string }[] = groupStore.items
+    .filter((g) => !shown.has(g.id))
+    .map((g) => ({ id: g.id, name: g.name }));
+  if (!shown.has(null)) out.push({ id: null, name: "Ungrouped" });
+  return out;
+});
+
 // Hostname of a monitor's target: the URL host for http(-ping), else the bare
 // "host" / "host:port" target with any port/path stripped.
 function hostOf(m: Monitor): string {
@@ -447,11 +555,15 @@ async function showLogFiles(m: Monitor) {
   <div v-for="section in sections" :key="section.id ?? 'ungrouped'" class="monitor-section">
     <div
       class="section-head"
+      :class="{ 'section-drop': dragOverSection === sectionKey(section.id) }"
       role="button"
       tabindex="0"
       @click="toggleSection(section.id)"
       @keydown.enter.prevent="toggleSection(section.id)"
       @keydown.space.prevent="toggleSection(section.id)"
+      @dragover="onSectionDragOver(section.id, $event)"
+      @dragleave="onSectionDragLeave(section.id)"
+      @drop.prevent="onSectionDrop(section.id)"
     >
       <span class="section-caret" :class="{ collapsed: collapsed.has(sectionKey(section.id)) }">▾</span>
       <h2>{{ section.name }}</h2>
@@ -536,8 +648,14 @@ async function showLogFiles(m: Monitor) {
           </template>
           <span v-else class="muted">No users</span>
         </div>
-        <div v-if="!m.active || (m.tags?.length ?? 0)" class="row-meta">
+        <div
+          v-if="!m.active || m.stats?.status === 3 || (m.tags?.length ?? 0)"
+          class="row-meta"
+        >
           <span v-if="!m.active" class="paused-badge">paused</span>
+          <span v-else-if="m.stats?.status === 3" class="maintenance-badge">
+            maintenance
+          </span>
           <span
             v-for="t in m.tags ?? []"
             :key="t.id"
@@ -600,10 +718,25 @@ async function showLogFiles(m: Monitor) {
         v-for="m in section.monitors"
         :key="m.id"
         class="monitor-card"
-        :class="'border-' + (m.active ? statusLabel(m.stats?.status).cls : 'status-paused')"
+        :class="[
+          'border-' + (m.active ? statusLabel(m.stats?.status).cls : 'status-paused'),
+          { 'drag-over': dragOverId === m.id, dragging: dragId === m.id },
+        ]"
+        @dragover="onDragOver(m, $event)"
+        @dragleave="onDragLeave(m)"
+        @drop.prevent="onDrop(m)"
       >
         <div class="monitor-card-header">
           <div class="header-left">
+            <span
+              class="drag-handle"
+              draggable="true"
+              title="Drag to reorder"
+              aria-label="Drag to reorder"
+              @dragstart="onDragStart(m, $event)"
+              @dragend="onDragEnd"
+              >⠿</span
+            >
             <span
               class="led led-header"
               :class="m.active ? statusLabel(m.stats?.status).cls : 'led-paused'"
@@ -614,6 +747,9 @@ async function showLogFiles(m: Monitor) {
             </router-link>
             <span class="type-tag">{{ m.type }}</span>
             <span v-if="!m.active" class="paused-badge">paused</span>
+            <span v-else-if="m.stats?.status === 3" class="maintenance-badge">
+              maintenance
+            </span>
             <span
               v-for="t in m.tags ?? []"
               :key="t.id"
@@ -745,6 +881,20 @@ async function showLogFiles(m: Monitor) {
     </div>
     </div>
     </div>
+  </div>
+
+  <!-- Drop targets for groups with no visible cards, shown only while dragging
+       so a monitor can be moved into an (otherwise hidden) empty group. -->
+  <div
+    v-for="g in emptyDragGroups"
+    :key="'empty-' + (g.id ?? 'ungrouped')"
+    class="section-drop-zone"
+    :class="{ 'section-drop': dragOverSection === sectionKey(g.id) }"
+    @dragover="onSectionDragOver(g.id, $event)"
+    @dragleave="onSectionDragLeave(g.id)"
+    @drop.prevent="onSectionDrop(g.id)"
+  >
+    Drop here to move into “{{ g.name }}”
   </div>
 
   <MonitorForm

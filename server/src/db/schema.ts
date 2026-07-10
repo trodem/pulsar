@@ -46,6 +46,9 @@ export const monitors = sqliteTable("monitors", {
   // HTTP method.
   method: text("method").notNull().default("GET"),
   active: integer("active", { mode: "boolean" }).notNull().default(true),
+  // Manual sort order within a group (lower shows first). Set by drag-and-drop
+  // reordering on the Monitors page; ties broken by id.
+  position: integer("position").notNull().default(0),
   createdAt: integer("created_at")
     .notNull()
     .default(sql`(unixepoch())`),

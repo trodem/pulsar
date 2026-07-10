@@ -49,6 +49,7 @@ export function initSchema(): void {
       accepted_status TEXT NOT NULL DEFAULT '200-299',
       method TEXT NOT NULL DEFAULT 'GET',
       active INTEGER NOT NULL DEFAULT 1,
+      position INTEGER NOT NULL DEFAULT 0,
       created_at INTEGER NOT NULL DEFAULT (unixepoch())
     );
 
@@ -130,6 +131,14 @@ export function initSchema(): void {
   if (!columnExists("monitors", "group_id")) {
     sqlite.exec(
       "ALTER TABLE monitors ADD COLUMN group_id INTEGER REFERENCES groups(id) ON DELETE SET NULL;",
+    );
+  }
+
+  // Migrate databases that predate drag-and-drop reordering: add the position
+  // column (defaults to 0, so existing monitors keep their id order until moved).
+  if (!columnExists("monitors", "position")) {
+    sqlite.exec(
+      "ALTER TABLE monitors ADD COLUMN position INTEGER NOT NULL DEFAULT 0;",
     );
   }
 }

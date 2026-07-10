@@ -121,9 +121,14 @@ function tagsByMonitor(monitorIds: number[]): Map<number, Tag[]> {
   return byMonitor;
 }
 
-// List monitors with live status + stats for the dashboard.
+// List monitors with live status + stats for the dashboard. Ordered by the
+// manual drag-and-drop position (then id) so the saved card order is preserved.
 router.get("/", (_req, res) => {
-  const all = db.select().from(monitors).all();
+  const all = db
+    .select()
+    .from(monitors)
+    .orderBy(asc(monitors.position), asc(monitors.id))
+    .all();
   const tagMap = tagsByMonitor(all.map((m) => m.id));
   const data = all.map((m) => ({
     ...m,
@@ -262,6 +267,38 @@ router.post(
     res.json({ imported: created.length, skipped });
   },
 );
+
+// Persists a new card order (and group membership). The client sends every
+// monitor in the desired display order, each with the group it now belongs to;
+// the monitor's `position` is set to its index and its `group_id` updated so a
+// card dragged into another group sticks. Registered before `/:id` so "reorder"
+// isn't captured as a monitor id.
+router.put("/reorder", (req, res) => {
+  const parsed = z
+    .object({
+      items: z.array(
+        z.object({
+          id: z.number().int(),
+          groupId: z.number().int().nullable(),
+        }),
+      ),
+    })
+    .safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.issues });
+    return;
+  }
+  const { items } = parsed.data;
+  db.transaction(() => {
+    items.forEach((item, index) => {
+      db.update(monitors)
+        .set({ position: index, groupId: item.groupId })
+        .where(eq(monitors.id, item.id))
+        .run();
+    });
+  });
+  res.status(204).end();
+});
 
 router.get("/:id", (req, res) => {
   const id = Number(req.params.id);

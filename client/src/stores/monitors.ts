@@ -123,6 +123,31 @@ export const useMonitorStore = defineStore("monitors", () => {
     return data;
   }
 
+  // Persist a new card order and group membership. `items` lists every monitor
+  // in the desired display order, each with the group it now belongs to; the
+  // local list is reordered (and any group change applied) immediately
+  // (optimistic) and the server stores each monitor's new position + group_id.
+  // On failure we refetch to fall back to the server's truth.
+  async function reorder(items: { id: number; groupId: number | null }[]) {
+    const byId = new Map(monitors.value.map((m) => [m.id, m]));
+    const next: Monitor[] = [];
+    for (const item of items) {
+      const m = byId.get(item.id);
+      if (!m) continue;
+      m.groupId = item.groupId;
+      next.push(m);
+    }
+    // Keep any monitors not present in `items` (shouldn't happen) at the end.
+    const seen = new Set(items.map((i) => i.id));
+    for (const m of monitors.value) if (!seen.has(m.id)) next.push(m);
+    monitors.value = next;
+    try {
+      await api.put("/monitors/reorder", { items });
+    } catch {
+      await fetchAll();
+    }
+  }
+
   // Apply a live heartbeat pushed over the websocket to local state.
   function applyHeartbeat(monitorId: number, hb: Heartbeat) {
     const m = monitors.value.find((x) => x.id === monitorId);
@@ -179,6 +204,7 @@ export const useMonitorStore = defineStore("monitors", () => {
     logFiles,
     exportMonitorsCsv,
     importMonitorsCsv,
+    reorder,
     bindSocket,
   };
 });
