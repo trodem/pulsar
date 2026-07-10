@@ -404,8 +404,8 @@ select {
   color: #fff;
 }
 
-/* Drag-and-drop reordering (card view). The handle is the only draggable part
-   of a card, so clicks on the name/links/buttons still work normally. */
+/* Drag-and-drop reordering (card + list views). The ⠿ grip is the only
+   draggable part, so clicks on the name/links/buttons still work normally. */
 .drag-handle {
   cursor: grab;
   color: var(--text-dim);
@@ -418,13 +418,55 @@ select {
 .drag-handle:active {
   cursor: grabbing;
 }
-/* The card being dragged fades; the current drop target shows an accent ring. */
-.monitor-card.dragging {
+/* The card/row being dragged fades out. */
+.monitor-card.dragging,
+.monitor-row.dragging {
   opacity: 0.5;
 }
-.monitor-card.drag-over {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 2px var(--accent) inset;
+/* Insertion line: a bright accent bar drawn on the edge where the dragged item
+   will land, so the drop point is unambiguous. Rows split top/bottom (list is
+   vertical); cards split left/right (the grid flows horizontally). */
+.monitor-card.drop-before,
+.monitor-card.drop-after,
+.monitor-row.drop-before,
+.monitor-row.drop-after {
+  position: relative;
+}
+.monitor-row.drop-before::after,
+.monitor-row.drop-after::after,
+.monitor-card.drop-before::after,
+.monitor-card.drop-after::after {
+  content: "";
+  position: absolute;
+  z-index: 3;
+  background: var(--accent);
+  border-radius: 2px;
+  box-shadow: 0 0 4px var(--accent);
+}
+.monitor-row.drop-before::after,
+.monitor-row.drop-after::after {
+  left: 0;
+  right: 0;
+  height: 3px;
+}
+.monitor-row.drop-before::after {
+  top: -2px;
+}
+.monitor-row.drop-after::after {
+  bottom: -2px;
+}
+/* The card clips its own overflow, so keep the line just inside the edge. */
+.monitor-card.drop-before::after,
+.monitor-card.drop-after::after {
+  top: 0;
+  bottom: 0;
+  width: 3px;
+}
+.monitor-card.drop-before::after {
+  left: 0;
+}
+.monitor-card.drop-after::after {
+  right: 0;
 }
 /* A group header highlighted as a drop target (drop into that group's end). */
 .section-head.section-drop {

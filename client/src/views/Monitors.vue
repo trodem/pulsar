@@ -227,7 +227,9 @@ function openWebPage(m: Monitor) {
   window.open(m.target, "_blank", "noopener");
 }
 
-// --- Drag-and-drop card reordering (card view only) --------------------
+// --- Drag-and-drop reordering (card + list views) ---------------------
+// Both views use the same ⠿ grip as the drag handle and share these handlers,
+// keyed by monitor id; the card/row itself is the drop target.
 // The card being dragged and the card currently hovered as a drop target (both
 // monitor ids), plus the section header hovered as a drop target (group id, or
 // "ungrouped"). All null when no drag is in progress. A drop onto another
@@ -235,6 +237,9 @@ function openWebPage(m: Monitor) {
 const dragId = ref<number | null>(null);
 const dragOverId = ref<number | null>(null);
 const dragOverSection = ref<string | null>(null);
+// Whether the drop would land *after* the hovered target (cursor past its
+// midpoint) rather than before it. Drives the insertion-line indicator.
+const dropAfter = ref(false);
 
 // Builds the reorder payload from a flat, already-ordered monitor array,
 // overriding the dragged monitor's group so the move is persisted.
@@ -252,11 +257,18 @@ function onDragStart(m: Monitor, e: DragEvent) {
   if (e.dataTransfer) e.dataTransfer.effectAllowed = "move";
 }
 
-// Highlight any card (other than the one being dragged) as a valid drop target.
+// Mark the hovered target and which side the drop line shows on. List view
+// stacks vertically (split by cursor Y); the card grid flows horizontally
+// (split by cursor X), so the insertion line points the right way in each.
 function onDragOver(target: Monitor, e: DragEvent) {
   if (dragId.value == null || dragId.value === target.id) return;
   e.preventDefault();
   if (e.dataTransfer) e.dataTransfer.dropEffect = "move";
+  const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+  dropAfter.value =
+    ui.monitorView === "list"
+      ? e.clientY > rect.top + rect.height / 2
+      : e.clientX > rect.left + rect.width / 2;
   dragOverId.value = target.id;
   dragOverSection.value = null;
 }
@@ -265,10 +277,12 @@ function onDragLeave(target: Monitor) {
   if (dragOverId.value === target.id) dragOverId.value = null;
 }
 
-// Drop the dragged card just before the target card. If the target is in another
-// group the monitor moves into it. Persists the new order + group membership.
+// Drop the dragged card before or after the target (matching the drop line).
+// If the target is in another group the monitor moves into it. Persists the
+// new order + group membership.
 function onDrop(target: Monitor) {
   const id = dragId.value;
+  const after = dropAfter.value;
   dragOverId.value = null;
   dragId.value = null;
   if (id == null || id === target.id) return;
@@ -276,9 +290,9 @@ function onDrop(target: Monitor) {
   if (!dragged) return;
 
   const arr = store.monitors.filter((m) => m.id !== id);
-  const insertAt = arr.findIndex((m) => m.id === target.id);
-  if (insertAt < 0) return;
-  arr.splice(insertAt, 0, dragged);
+  const targetIdx = arr.findIndex((m) => m.id === target.id);
+  if (targetIdx < 0) return;
+  arr.splice(after ? targetIdx + 1 : targetIdx, 0, dragged);
   store.reorder(reorderPayload(arr, id, target.groupId));
 }
 
@@ -624,8 +638,27 @@ async function showLogFiles(m: Monitor) {
         v-for="m in section.monitors"
         :key="m.id"
         class="monitor-row"
-        :class="'border-' + (m.active ? statusLabel(m.stats?.status).cls : 'status-paused')"
+        :class="[
+          'border-' + (m.active ? statusLabel(m.stats?.status).cls : 'status-paused'),
+          {
+            dragging: dragId === m.id,
+            'drop-before': dragOverId === m.id && !dropAfter,
+            'drop-after': dragOverId === m.id && dropAfter,
+          },
+        ]"
+        @dragover="onDragOver(m, $event)"
+        @dragleave="onDragLeave(m)"
+        @drop.prevent="onDrop(m)"
       >
+        <span
+          class="drag-handle"
+          draggable="true"
+          title="Drag to reorder"
+          aria-label="Drag to reorder"
+          @dragstart="onDragStart(m, $event)"
+          @dragend="onDragEnd"
+          >⠿</span
+        >
         <span
           class="led"
           :class="m.active ? statusLabel(m.stats?.status).cls : 'led-paused'"
@@ -720,7 +753,11 @@ async function showLogFiles(m: Monitor) {
         class="monitor-card"
         :class="[
           'border-' + (m.active ? statusLabel(m.stats?.status).cls : 'status-paused'),
-          { 'drag-over': dragOverId === m.id, dragging: dragId === m.id },
+          {
+            dragging: dragId === m.id,
+            'drop-before': dragOverId === m.id && !dropAfter,
+            'drop-after': dragOverId === m.id && dropAfter,
+          },
         ]"
         @dragover="onDragOver(m, $event)"
         @dragleave="onDragLeave(m)"
