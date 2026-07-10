@@ -66,32 +66,47 @@ and `/socket.io` at the backend.
 
 ## Docker
 
-A multi-stage `Dockerfile` builds the client and server and produces a single
-image where **Express serves both the API/WebSocket and the static frontend**
-on one port. The SQLite database is persisted on a named volume.
+`docker compose` runs **two services**, each with its own multi-stage
+`Dockerfile`:
 
-The image is built **locally by docker compose** — nothing is pushed to any
-registry. Only the base `node` image is pulled from Docker Hub during the build.
+- **server** — Node/Express API + Socket.IO on port `3021`. The runtime image
+  installs `iputils-ping` (for `ping` / `http-ping` monitors) and persists the
+  SQLite database on the `pulsar-data` named volume.
+- **client** — the Vue SPA built to static files and served by **nginx**, which
+  reverse-proxies `/api` and `/socket.io` to the server. The browser therefore
+  talks to a single origin (no CORS), and the app is published on port `8090`
+  (override with `WEB_PORT` in `.env`).
+
+Images are built **locally by docker compose** — nothing is pushed to any
+registry. Only the base `node` / `nginx` images are pulled during the build.
 
 ### Run
 
 ```bash
+cp .env.example .env          # set JWT_SECRET (compose refuses to start without it)
 docker compose up -d --build
 ```
 
-Then open http://localhost:3021 and create your admin account.
+Then open http://localhost:8090 and create your admin account.
 Stop with `docker compose down` (add `-v` to also wipe the database volume).
 
-Edit the environment in `docker-compose.yml` before going to production:
+Environment is read from `.env` and passed to the **server** service in
+`docker-compose.yml`:
 
-| Variable        | Purpose                                                       |
-| --------------- | ------------------------------------------------------------- |
-| `JWT_SECRET`    | **Change this** — signs auth tokens.                          |
-| `CLIENT_ORIGIN` | `*` reflects any origin; set to your public URL to lock down. |
-| `PORT`          | Listen port inside the container (default `3021`).            |
-| `DB_PATH`       | SQLite file path (default `/app/server/data/uptime.db`).      |
+| Variable            | Purpose                                                      |
+| ------------------- | ----------------------------------------------------------- |
+| `JWT_SECRET`        | **Required** — signs auth tokens; compose fails if unset.   |
+| `DB_PATH`           | SQLite file path inside the container (default `./data/uptime.db`). |
+| `STAP_LOG_ENABLED`  | STAP logged-user extraction; `net use`/SMB is Windows-only, so this has no effect in the Linux container. |
+| `STAP_LOG_UNC` / `STAP_LOG_USER` / `STAP_LOG_PASSWORD` | STAP share + credentials (optional). |
 
-The database lives in the `uptime-data` volume, so it survives
+`CLIENT_ORIGIN` is fixed to `*` for the server because nginx proxies
+same-origin. The ICMP `ping` needs the raw-socket capability, so the server
+service is granted `cap_add: [NET_RAW]`. The API port is not published to the
+host by default (only nginx reaches it over the internal network) — uncomment
+the `ports` block in `docker-compose.yml` to expose `3021` directly.
+
+The database lives in the `pulsar-data` volume, so it survives
 `docker compose down` / image rebuilds. Remove it with
 `docker compose down -v` for a clean slate.
 

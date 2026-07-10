@@ -1,0 +1,16 @@
+node_modules
+dist
+*.tsbuildinfo
+
+# Caches / logs / editor cruft
+.vite
+.cache
+*.log
+npm-debug.log*
+.vscode
+.idea
+.DS_Store
+Thumbs.db
+
+Dockerfile
+.dockerignore

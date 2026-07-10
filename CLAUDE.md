@@ -15,7 +15,7 @@ Two independent packages (no root workspace — install/run each separately):
 - `server/` — Express REST API + Socket.IO, per-monitor scheduler, SQLite via Drizzle ORM. ESM, run with `tsx`.
 - `client/` — Vue 3 SPA (Vite, Pinia, Vue Router). Dev server proxies `/api` and `/socket.io` to the backend.
 
-In production the server builds to `dist/` and serves the client's static build from `server/public` on a single port (see `Dockerfile`).
+`docker compose` runs the two packages as **two services**: `server/Dockerfile` builds the API image, and `client/Dockerfile` builds the SPA and serves it with nginx (`client/nginx.conf`), reverse-proxying `/api` and `/socket.io` to the server. The client is published on port `8090` (override with `WEB_PORT`). The server still contains fallback code to serve a static client from `server/public` if that dir exists (single-image mode), but the compose setup does not use it.
 
 ### Backend flow
 - `src/index.ts` — boot: `initSchema()` → mount routes (`/api/auth`, `/api/monitors`, `/api/notifications`) → `initSocket()` → `startScheduler()`.
@@ -47,9 +47,10 @@ npm run dev      # vite, http://localhost:5173
 npm run build    # vue-tsc -b && vite build -> client/dist
 ```
 
-### Docker (whole app, single port)
+### Docker (two services: nginx-served client + API server)
 ```bash
-docker compose up -d --build   # http://localhost:3021
+cp .env.example .env           # set JWT_SECRET (compose fails without it)
+docker compose up -d --build   # http://localhost:8090
 ```
 
 ## Configuration
