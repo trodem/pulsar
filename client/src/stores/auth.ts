@@ -1,4 +1,4 @@
-import { defineStore } from "pinia";
+import { acceptHMRUpdate, defineStore } from "pinia";
 import { ref } from "vue";
 import { api } from "../api";
 import { connectSocket, disconnectSocket } from "../socket";
@@ -12,6 +12,10 @@ export const useAuthStore = defineStore("auth", () => {
     username.value = u;
     localStorage.setItem("token", t);
     localStorage.setItem("username", u);
+    // Fresh login: signal the Monitors page to start with every group
+    // collapsed. It clears this flag on mount, so the user's later
+    // expand/collapse choices persist normally until the next login.
+    localStorage.setItem("monitors.collapseAllOnLogin", "1");
     connectSocket(t);
   }
 
@@ -43,3 +47,9 @@ export const useAuthStore = defineStore("auth", () => {
 
   return { token, username, checkSetup, setup, login, logout };
 });
+
+// Let Vite hot-swap this store's actions during dev; without it, edits to
+// setSession/login keep running the old code until a full page reload.
+if (import.meta.hot) {
+  import.meta.hot.accept(acceptHMRUpdate(useAuthStore, import.meta.hot));
+}

@@ -111,7 +111,10 @@ select {
 .app-shell {
   display: flex;
   flex-direction: column;
-  min-height: 100vh;
+  /* Pin the shell to the viewport so the header and sidebar stay fixed and only
+     .main scrolls (bounded height lets .main's overflow-y: auto kick in). */
+  height: 100vh;
+  overflow: hidden;
 }
 
 .app-header {
@@ -261,15 +264,32 @@ select {
 .main {
   flex: 1;
   min-width: 0;
-  padding: 28px 34px;
+  /* No top padding: the .page-head toolbar sits flush under the header. Its own
+     padding provides the top spacing, and it spans the full width via negative
+     side margins that cancel this horizontal padding. */
+  padding: 0 34px 28px;
   overflow-y: auto;
 }
 
+/* The page toolbar, pinned flush under the app header on every shell page so
+   only the content below it scrolls. The negative side margins cancel .main's
+   horizontal padding so the bar (and its bottom border + shadow) span the full
+   width; the padding restores the content inset. No negative *top* margin and
+   no top padding on .main, so the bar sits flush against the header both at
+   rest and when stuck (sticky aligns the margin box, so a negative top margin
+   would drop it below the header and expose content scrolling behind). */
 .page-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 24px;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  margin: 0 -34px 20px;
+  padding: 18px 34px;
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.18);
 }
 
 .page-head h1 {
@@ -1466,9 +1486,9 @@ select {
   gap: 14px;
 }
 
-/* "Check users" action on a group header; kept vertically centered against the
-   baseline-aligned title/stats. The section-stats margin-left:auto pushes both
-   the stats and this button to the right edge of the header. */
+/* "Check users" action on a group header; sits at the far right edge, after the
+   stats (which carry margin-left:auto). Kept vertically centered against the
+   baseline-aligned title/stats. */
 .section-check-users {
   align-self: center;
   flex-shrink: 0;

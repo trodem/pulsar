@@ -32,6 +32,17 @@ function sectionKey(id: number | null): string {
   return id == null ? "ungrouped" : String(id);
 }
 
+// Set once per fresh login by the auth store. When present on mount, collapse
+// every section, then clear the flag so subsequent toggles persist as usual.
+const COLLAPSE_ALL_KEY = "monitors.collapseAllOnLogin";
+
+function collapseAllSections() {
+  const keys = [...groupStore.items.map((g) => sectionKey(g.id)), "ungrouped"];
+  const next = new Set(keys);
+  collapsed.value = next;
+  localStorage.setItem(COLLAPSED_KEY, JSON.stringify([...next]));
+}
+
 function toggleSection(id: number | null) {
   const key = sectionKey(id);
   const next = new Set(collapsed.value);
@@ -200,6 +211,12 @@ onMounted(async () => {
     groupStore.fetchAll(),
     tagStore.fetchAll(),
   ]);
+  // On the first Monitors visit after logging in, start with every group
+  // collapsed; from then on the user's own toggles are what persist.
+  if (localStorage.getItem(COLLAPSE_ALL_KEY)) {
+    collapseAllSections();
+    localStorage.removeItem(COLLAPSE_ALL_KEY);
+  }
   store.bindSocket();
 });
 
@@ -582,21 +599,6 @@ async function showLogFiles(m: Monitor) {
       <span class="section-caret" :class="{ collapsed: collapsed.has(sectionKey(section.id)) }">▾</span>
       <h2>{{ section.name }}</h2>
       <span class="muted">{{ section.monitors.length }}</span>
-      <button
-        v-if="section.monitors.some((m) => m.type === 'http-ping')"
-        class="btn btn-sm section-check-users"
-        title="Read the remote log for every http-ping monitor in this group"
-        :disabled="section.monitors.some((m) => m.type === 'http-ping' && checkingUsers.has(m.id))"
-        @click.stop="checkGroupUsers(section.monitors)"
-        @keydown.enter.stop
-        @keydown.space.stop
-      >
-        {{
-          section.monitors.some((m) => m.type === 'http-ping' && checkingUsers.has(m.id))
-            ? "⏳ Checking…"
-            : "👥 Online users"
-        }}
-      </button>
       <div class="section-stats">
         <span class="section-stat" style="color: var(--up)" title="Up">
           ● {{ section.stats.up }}
@@ -627,6 +629,21 @@ async function showLogFiles(m: Monitor) {
           {{ ms(section.stats.avgPing) }}
         </span>
       </div>
+      <button
+        v-if="section.monitors.some((m) => m.type === 'http-ping')"
+        class="btn btn-sm section-check-users"
+        title="Read the remote log for every http-ping monitor in this group"
+        :disabled="section.monitors.some((m) => m.type === 'http-ping' && checkingUsers.has(m.id))"
+        @click.stop="checkGroupUsers(section.monitors)"
+        @keydown.enter.stop
+        @keydown.space.stop
+      >
+        {{
+          section.monitors.some((m) => m.type === 'http-ping' && checkingUsers.has(m.id))
+            ? "⏳ Checking…"
+            : "👥 Online users"
+        }}
+      </button>
     </div>
     <div
       class="section-collapsible"
@@ -699,6 +716,14 @@ async function showLogFiles(m: Monitor) {
           </span>
         </div>
         <div class="row-actions monitor-actions">
+          <router-link
+            :to="`/monitor/${m.id}`"
+            class="btn btn-sm btn-icon"
+            title="Details"
+            aria-label="Details"
+          >
+            📊
+          </router-link>
           <button
             v-if="m.type === 'http' || m.type === 'http-ping'"
             class="btn btn-sm btn-icon"
@@ -800,6 +825,14 @@ async function showLogFiles(m: Monitor) {
             </div>
           </div>
           <div class="header-right monitor-actions">
+            <router-link
+              :to="`/monitor/${m.id}`"
+              class="btn btn-sm btn-icon"
+              title="Details"
+              aria-label="Details"
+            >
+              📊
+            </router-link>
             <button
               v-if="m.type === 'http' || m.type === 'http-ping'"
               class="btn btn-sm btn-icon"

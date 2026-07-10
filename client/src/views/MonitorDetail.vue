@@ -241,6 +241,13 @@ const events = computed(() =>
         </span>
         <div class="monitor-actions">
           <button
+            class="btn btn-sm"
+            title="Back to the monitors list"
+            @click="router.push('/monitors')"
+          >
+            ← Back
+          </button>
+          <button
             v-if="monitor.type === 'http' || monitor.type === 'http-ping'"
             class="btn btn-sm"
             title="Open the monitored page in a new tab"
