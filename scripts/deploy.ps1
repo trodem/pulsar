@@ -35,8 +35,18 @@
     Salta "npm install" nei due package (usalo per ri-build veloci quando le
     dipendenze sono gia installate).
 
+.PARAMETER Start
+    Dopo il build avvia subito il server in primo piano (node dist/index.js),
+    senza installare un servizio. Utile per far tutto con un solo comando quando
+    non vuoi (o non hai) NSSM. Ctrl+C per fermarlo. Ignorato con -InstallService
+    (in quel caso il servizio parte da solo).
+
 .EXAMPLE
-    # Solo build (client + server), niente servizio
+    # Build + avvio immediato in primo piano (un comando solo, niente servizio)
+    .\deploy.ps1 -Start -OpenFirewall
+
+.EXAMPLE
+    # Solo build (client + server), niente avvio
     .\deploy.ps1
 
 .EXAMPLE
@@ -52,7 +62,8 @@ param(
     [string] $ServiceUser,
     [string] $ServicePassword,
     [switch] $OpenFirewall,
-    [switch] $SkipInstall
+    [switch] $SkipInstall,
+    [switch] $Start
 )
 
 $ErrorActionPreference = 'Stop'
@@ -230,4 +241,11 @@ Write-Host "Accesso dagli altri PC della rete:" -ForegroundColor Gray
 foreach ($ip in $ips) { Write-Host "    http://${ip}:$Port" -ForegroundColor White }
 if (-not $OpenFirewall) {
     Write-Warn2 "Nota: non ho aperto il firewall. Rilancia con -OpenFirewall se gli altri PC non riescono a connettersi."
+}
+
+# Avvio in primo piano su richiesta (solo se non stiamo installando un servizio).
+if ($Start -and -not $InstallService) {
+    Write-Step "Avvio del server (Ctrl+C per fermare)"
+    # node dist/index.js con CWD = server, cosi legge server/.env e server/data.
+    Invoke-Native (Get-Command node).Source @('dist\index.js') $serverDir
 }

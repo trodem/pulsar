@@ -27,14 +27,15 @@ e copiato in `server/public`. Niente nginx, niente CORS, niente porte separate.
 Tutti i passaggi sono automatizzati da **`scripts\deploy.ps1`**. Apri **PowerShell
 come Amministratore** nella cartella del progetto.
 
-### Prova rapida (solo build, avvio manuale)
+### Prova rapida (build + avvio in un comando)
 
 ```powershell
-.\scripts\deploy.ps1
-cd server ; npm start
+.\scripts\deploy.ps1 -Start -OpenFirewall
 ```
 
-Lo script, se `server/.env` non esiste, ne crea uno con un `JWT_SECRET` casuale.
+Compila e avvia subito il server in primo piano (Ctrl+C per fermare). Senza
+`-Start` lo script fa solo il build e poi devi avviare a mano (`cd server ; npm start`).
+Se `server/.env` non esiste, lo script ne crea uno con un `JWT_SECRET` casuale.
 
 ### Deploy completo (servizio Windows + firewall + STAP)
 
@@ -66,6 +67,7 @@ Cosa fa lo script, in ordine:
 | `-NssmPath <path>` | Percorso di `nssm.exe` se non è nel PATH. |
 | `-ServiceUser` / `-ServicePassword` | Account sotto cui gira il servizio (chiave per STAP). |
 | `-OpenFirewall` | Crea la regola firewall inbound per la porta. |
+| `-Start` | Dopo il build avvia il server in primo piano (Ctrl+C per fermare). Ignorato con `-InstallService`. |
 | `-SkipInstall` | Salta `npm install` (rebuild veloce se le dipendenze ci sono già). |
 
 ---
