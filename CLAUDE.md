@@ -69,6 +69,7 @@ Server reads `.env` from its CWD via `process.loadEnvFile` (see `src/config.ts`)
 
 ## Conventions
 
+- **Language: German (Deutsch).** All human-readable text and all code comments in this project must be written in German — UI strings, log/console messages, user-facing errors, documentation (`README.md`, `setup.md`, `docs/`), script comments, and inline comments in both `server/` and `client/`. Only code identifiers (variable/function names, object keys, routes, env-var names) stay in English. When adding or editing anything, write its prose and comments in German.
 - ESM everywhere. Backend imports use explicit `.js` extensions (e.g. `import ... from "./config.js"`) even though sources are `.ts` — required for Node ESM. Keep this.
 - No test suite or linter is configured. Verify changes by running the app.
 - Comments explain *why*; keep new code's comment density and style consistent with the surrounding file.

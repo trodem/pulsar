@@ -1,48 +1,49 @@
 # Pulsar
 
-A self-hosted uptime monitor inspired by [Uptime Kuma](https://github.com/louislam/uptime-kuma),
-built with an Express + TypeScript backend, a Vue 3 frontend, and a SQLite database.
+Ein selbst gehosteter Uptime-Monitor, inspiriert von
+[Uptime Kuma](https://github.com/louislam/uptime-kuma), gebaut mit einem
+Express-+-TypeScript-Backend, einem Vue-3-Frontend und einer SQLite-Datenbank.
 
-## Features
+## Funktionen
 
-- Monitor types: **HTTP(s)**, **TCP port**, **Ping**
-- **Groups** (dashboard sections) and colored **tags** with tag-based filtering
-- Per-monitor interval, timeout, retries, and accepted status codes
-- Live dashboard over **WebSocket** (Socket.IO): heartbeat bars, 24h uptime %, latency
-- History / event log of up⇄down transitions
-- **Notifications** on state change: Webhook, Telegram, and Microsoft Teams
-  (with test button), each targetable at individual monitors and/or whole groups
-- Single-admin **authentication** (JWT + bcrypt), first-run setup wizard
-- Zero-config **SQLite** storage (tables auto-created on boot)
+- Monitor-Typen: **HTTP(s)**, **TCP-Port**, **Ping**
+- **Gruppen** (Dashboard-Bereiche) und farbige **Tags** mit Tag-basierter Filterung
+- Pro Monitor: Intervall, Timeout, Wiederholungen und akzeptierte Statuscodes
+- Live-Dashboard über **WebSocket** (Socket.IO): Heartbeat-Balken, 24h-Uptime-%, Latenz
+- Verlauf / Ereignisprotokoll der Up⇄Down-Übergänge
+- **Benachrichtigungen** bei Statuswechsel: Webhook, Telegram und Microsoft Teams
+  (mit Test-Schaltfläche), jeweils auf einzelne Monitore und/oder ganze Gruppen ausrichtbar
+- **Authentifizierung** (JWT + bcrypt), Einrichtungsassistent beim ersten Start
+- Zero-Config-**SQLite**-Speicher (Tabellen werden beim Start automatisch angelegt)
 
-## Tech stack
+## Technologie-Stack
 
-| Layer     | Tech                                                        |
-| --------- | ----------------------------------------------------------- |
-| Backend   | Node.js, Express, TypeScript, Socket.IO                     |
-| Database  | SQLite via libSQL (`@libsql/client`) + Drizzle ORM          |
-| Scheduler | In-process per-monitor timers                               |
-| Frontend  | Vue 3, Vite, Pinia, Vue Router, `socket.io-client`, TS      |
+| Schicht    | Technologie                                                 |
+| ---------- | ----------------------------------------------------------- |
+| Backend    | Node.js, Express, TypeScript, Socket.IO                     |
+| Datenbank  | SQLite über libSQL (`@libsql/client`) + Drizzle ORM         |
+| Scheduler  | In-Process-Timer pro Monitor                                |
+| Frontend   | Vue 3, Vite, Pinia, Vue Router, `socket.io-client`, TS      |
 
-## Project layout
+## Projektstruktur
 
 ```
-server/   Express API, checkers, scheduler, Socket.IO, SQLite
-client/   Vue 3 SPA (dashboard, monitor editor, notifications)
+server/   Express-API, Checker, Scheduler, Socket.IO, SQLite
+client/   Vue-3-SPA (Dashboard, Monitor-Editor, Benachrichtigungen)
 ```
 
-## Getting started
+## Erste Schritte
 
 ### 1. Backend
 
 ```bash
 cd server
 npm install
-cp .env.example .env        # optional: change JWT_SECRET / PORT
+cp .env.example .env        # optional: JWT_SECRET / PORT ändern
 npm run dev                 # http://localhost:3021
 ```
 
-The SQLite file is created automatically at `server/data/uptime.db`.
+Die SQLite-Datei wird automatisch unter `server/data/uptime.db` angelegt.
 
 ### 2. Frontend
 
@@ -52,40 +53,43 @@ npm install
 npm run dev                 # http://localhost:5173
 ```
 
-Vite proxies `/api` and `/socket.io` to the backend, so just open
-http://localhost:5173 and create your admin account on first run.
+Vite leitet `/api` und `/socket.io` an das Backend weiter, öffne also einfach
+http://localhost:5173 und lege beim ersten Start dein Admin-Konto an.
 
-## Production deploy (native Windows, no Docker)
+## Produktions-Deployment (nativ unter Windows, ohne Docker)
 
-In production Pulsar runs as **one process on one port** (default `3021`): the
-client is built and copied into `server/public`, and the server serves the SPA,
-REST API and Socket.IO from there — no nginx, no separate port, no CORS. Native
-deploy is required for **STAP** (reading each host's logged-in users via Windows
-SMB shares), which cannot work inside a Linux container.
+In Produktion läuft Pulsar als **ein Prozess auf einem Port** (Standard `3021`):
+Der Client wird gebaut und nach `server/public` kopiert, und der Server liefert
+von dort die SPA, die REST-API und Socket.IO — kein nginx, kein getrennter Port,
+kein CORS. Das native Deployment ist für **STAP** erforderlich (Auslesen der
+angemeldeten Benutzer jedes Hosts über Windows-SMB-Freigaben), was in einem
+Linux-Container nicht funktioniert.
 
-From the repo root, in an **Administrator** PowerShell:
+Im Projekt-Stammverzeichnis, in einer **Administrator**-PowerShell:
 
 ```powershell
-.\scripts\deploy.ps1        # build client + server, copy client to server/public
-cd server ; npm start       # or install as a service (below)
+.\scripts\deploy.ps1        # Client + Server bauen, Client nach server/public kopieren
+cd server ; npm start       # oder als Dienst installieren (siehe unten)
 ```
 
-Full deploy with an auto-starting Windows service (NSSM), firewall rule, and a
-service account with access to the monitored hosts' `C$` shares (for STAP):
+Vollständiges Deployment mit automatisch startendem Windows-Dienst (NSSM),
+Firewall-Regel und einem Dienstkonto mit Zugriff auf die `C$`-Freigaben der
+überwachten Hosts (für STAP):
 
 ```powershell
 .\scripts\deploy.ps1 -InstallService -OpenFirewall `
     -NssmPath "C:\Tools\nssm.exe" `
-    -ServiceUser "DOMAIN\user" -ServicePassword "..."
+    -ServiceUser "DOMAIN\benutzer" -ServicePassword "..."
 ```
 
-Then open `http://<host-ip>:3021` from any PC on the LAN and create the admin
-account on first run. After code changes, redeploy with `.\scripts\update.ps1`
-(stop → rebuild → start). See **[setup.md](setup.md)** for the full guide.
+Öffne dann `http://<host-ip>:3021` von einem beliebigen PC im LAN und lege beim
+ersten Start das Admin-Konto an. Nach Codeänderungen mit `.\scripts\update.ps1`
+neu ausrollen (stoppen → neu bauen → starten). Siehe **[setup.md](setup.md)** für
+die vollständige Anleitung.
 
-## Notes
+## Hinweise
 
-- Ping uses the system `ping` binary (via the `ping` package), so it works
-  without elevated privileges on Windows/Linux/macOS.
-- Notifications fire only on a genuine state transition (up→down / down→up),
-  matching Uptime Kuma's behaviour.
+- Ping nutzt die System-`ping`-Binärdatei (über das `ping`-Paket), funktioniert
+  also ohne erhöhte Rechte unter Windows/Linux/macOS.
+- Benachrichtigungen werden nur bei einem echten Statuswechsel ausgelöst
+  (up→down / down→up), entsprechend dem Verhalten von Uptime Kuma.

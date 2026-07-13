@@ -1,114 +1,121 @@
-# Setup Pulsar — installazione nativa su Windows (senza Docker)
+# Pulsar Setup — native Installation unter Windows (ohne Docker)
 
-Guida per installare Pulsar su un PC Windows e renderlo raggiungibile da tutti i
-PC della stessa rete locale. Questa modalità **nativa** (niente Docker) mantiene
-attive **tutte** le funzionalità, inclusa la lettura degli utenti loggati e il
-restart via STAP (che usa le share SMB di Windows e non funziona in container Linux).
+Anleitung, um Pulsar auf einem Windows-PC zu installieren und für alle PCs im
+selben lokalen Netzwerk erreichbar zu machen. Dieser **native** Modus (ohne
+Docker) hält **alle** Funktionen aktiv, einschließlich des Auslesens der
+angemeldeten Benutzer und des Neustarts über STAP (das die SMB-Freigaben von
+Windows nutzt und in einem Linux-Container nicht funktioniert).
 
-Architettura in produzione: **un solo processo, una sola porta**. Il server Node
-serve la UI, le API e il socket sulla porta `3021`; il client Vue viene compilato
-e copiato in `server/public`. Niente nginx, niente CORS, niente porte separate.
-
----
-
-## 1. Prerequisiti
-
-- **Windows 10/11** (o Windows Server).
-- **Node.js LTS 22** — https://nodejs.org (serve ≥ 20.12 per `process.loadEnvFile`).
-- **NSSM** (solo se vuoi il servizio Windows) — https://nssm.cc, scarica ed estrai
-  `nssm.exe` da qualche parte (es. `C:\Tools\nssm.exe`).
-- Una copia del progetto sul PC host (puoi escludere le cartelle `node_modules`,
-  vengono reinstallate dallo script).
+Architektur in Produktion: **ein einziger Prozess, ein einziger Port**. Der
+Node-Server liefert die UI, die APIs und den Socket auf Port `3021`; der
+Vue-Client wird kompiliert und nach `server/public` kopiert. Kein nginx, kein
+CORS, keine getrennten Ports.
 
 ---
 
-## 2. Deploy automatico (consigliato)
+## 1. Voraussetzungen
 
-Tutti i passaggi sono automatizzati da **`scripts\deploy.ps1`**. Apri **PowerShell
-come Amministratore** nella cartella del progetto.
+- **Windows 10/11** (oder Windows Server).
+- **Node.js LTS 22** — https://nodejs.org (benötigt ≥ 20.12 für `process.loadEnvFile`).
+- **NSSM** (nur wenn du den Windows-Dienst willst) — https://nssm.cc, lade herunter
+  und entpacke `nssm.exe` irgendwohin (z. B. `C:\Tools\nssm.exe`).
+- Eine Kopie des Projekts auf dem Host-PC (die Ordner `node_modules` kannst du
+  weglassen, sie werden vom Skript neu installiert).
 
-### Prova rapida (build + avvio in un comando)
+---
+
+## 2. Automatisches Deployment (empfohlen)
+
+Alle Schritte sind durch **`scripts\deploy.ps1`** automatisiert. Öffne
+**PowerShell als Administrator** im Projektordner.
+
+### Schnelltest (Build + Start in einem Befehl)
 
 ```powershell
 .\scripts\deploy.ps1 -Start -OpenFirewall
 ```
 
-Compila e avvia subito il server in primo piano (Ctrl+C per fermare). Senza
-`-Start` lo script fa solo il build e poi devi avviare a mano (`cd server ; npm start`).
-Se `server/.env` non esiste, lo script ne crea uno con un `JWT_SECRET` casuale.
+Kompiliert und startet den Server sofort im Vordergrund (Strg+C zum Beenden).
+Ohne `-Start` führt das Skript nur den Build aus, und du musst manuell starten
+(`cd server ; npm start`). Existiert `server/.env` nicht, erzeugt das Skript eine
+Datei mit einem zufälligen `JWT_SECRET`.
 
-### Deploy completo (servizio Windows + firewall + STAP)
+### Vollständiges Deployment (Windows-Dienst + Firewall + STAP)
 
 ```powershell
 .\scripts\deploy.ps1 -InstallService -OpenFirewall `
     -NssmPath "C:\Tools\nssm.exe" `
-    -ServiceUser "DOMINIO\utente" -ServicePassword "la-password"
+    -ServiceUser "DOMAIN\benutzer" -ServicePassword "das-passwort"
 ```
 
-Cosa fa lo script, in ordine:
+Was das Skript der Reihe nach macht:
 
-1. Verifica Node ≥ 20.12.
-2. Crea `server/.env` con `JWT_SECRET` casuale **se manca** (se c'è, non lo tocca).
-3. `npm install` + `npm run build` del **client**.
-4. Copia il client compilato in **`server/public`** (pulendo i vecchi file).
-5. `npm install` + `npm run build` del **server**.
-6. *(con `-OpenFirewall`)* apre la porta TCP nel firewall.
-7. *(con `-InstallService`)* registra/riconfigura il servizio Windows `Pulsar`,
-   avvio automatico, log su `server/logs/` con rotazione a 10 MB, e — se indicato
-   — lo fa girare sotto l'account `-ServiceUser`.
-8. Mostra gli URL di accesso dagli altri PC.
+1. Prüft Node ≥ 20.12.
+2. Erstellt `server/.env` mit zufälligem `JWT_SECRET`, **falls sie fehlt** (ist
+   sie vorhanden, bleibt sie unberührt).
+3. `npm install` + `npm run build` des **Clients**.
+4. Kopiert den kompilierten Client nach **`server/public`** (löscht dabei die
+   alten Dateien).
+5. `npm install` + `npm run build` des **Servers**.
+6. *(mit `-OpenFirewall`)* öffnet den TCP-Port in der Firewall.
+7. *(mit `-InstallService`)* registriert/konfiguriert den Windows-Dienst `Pulsar`,
+   Autostart, Logs unter `server/logs/` mit Rotation bei 10 MB, und — falls
+   angegeben — lässt ihn unter dem Konto `-ServiceUser` laufen.
+8. Zeigt die Zugriffs-URLs für die anderen PCs an.
 
-### Parametri utili
+### Nützliche Parameter
 
-| Parametro | Effetto |
+| Parameter | Wirkung |
 |---|---|
-| `-Port 3021` | Porta del server (default 3021; deve combaciare con `PORT` in `.env`). |
-| `-InstallService` | Registra il servizio Windows via NSSM. |
-| `-NssmPath <path>` | Percorso di `nssm.exe` se non è nel PATH. |
-| `-ServiceUser` / `-ServicePassword` | Account sotto cui gira il servizio (chiave per STAP). |
-| `-OpenFirewall` | Crea la regola firewall inbound per la porta. |
-| `-Start` | Dopo il build avvia il server in primo piano (Ctrl+C per fermare). Ignorato con `-InstallService`. |
-| `-SkipInstall` | Salta `npm install` (rebuild veloce se le dipendenze ci sono già). |
+| `-Port 3021` | Port des Servers (Standard 3021; muss mit `PORT` in `.env` übereinstimmen). |
+| `-InstallService` | Registriert den Windows-Dienst über NSSM. |
+| `-NssmPath <pfad>` | Pfad zu `nssm.exe`, falls nicht im PATH. |
+| `-ServiceUser` / `-ServicePassword` | Konto, unter dem der Dienst läuft (entscheidend für STAP). |
+| `-OpenFirewall` | Erstellt die eingehende Firewall-Regel für den Port. |
+| `-Start` | Startet den Server nach dem Build im Vordergrund (Strg+C zum Beenden). Wird mit `-InstallService` ignoriert. |
+| `-SkipInstall` | Überspringt `npm install` (schneller Rebuild, wenn die Abhängigkeiten schon da sind). |
 
 ---
 
-## 3. Configurazione `server/.env`
+## 3. Konfiguration `server/.env`
 
-Se lo generi a mano, i valori chiave sono:
+Wenn du sie manuell erstellst, sind die wichtigsten Werte:
 
 ```ini
 PORT=3021
-JWT_SECRET=<stringa-lunga-e-casuale>
+JWT_SECRET=<lange-zufällige-zeichenkette>
 DB_PATH=./data/uptime.db
 
-# STAP — utenti loggati / restart (solo monitor http-ping)
+# STAP — angemeldete Benutzer / Neustart (nur http-ping-Monitore)
 STAP_LOG_ENABLED=true
-STAP_LOG_USER=DOMINIO\utente
-STAP_LOG_PASSWORD=<password>
-# STAP_LOG_UNC=   # lascia il default se il path è quello standard
+STAP_LOG_USER=DOMAIN\benutzer
+STAP_LOG_PASSWORD=<passwort>
+# STAP_LOG_UNC=   # Standard belassen, wenn der Pfad der übliche ist
 ```
 
-Genera un buon `JWT_SECRET`:
+Ein gutes `JWT_SECRET` erzeugen:
 
 ```powershell
 [Convert]::ToBase64String((1..48 | ForEach-Object { Get-Random -Maximum 256 }))
 ```
 
-> ⚠️ Se cambi `JWT_SECRET` in seguito, tutti gli utenti dovranno rifare il login.
+> ⚠️ Wenn du `JWT_SECRET` später änderst, müssen sich alle Benutzer neu anmelden.
 >
-> ⚠️ `server/.env` contiene credenziali reali: **non committarlo mai** (è già gitignorato).
+> ⚠️ `server/.env` enthält echte Zugangsdaten: **niemals committen** (ist bereits in `.gitignore`).
 
-### Requisiti STAP
+### STAP-Voraussetzungen
 
-Perché la funzione "Check users" / restart funzioni, l'account con cui gira il
-server (l'utente `-ServiceUser`, oppure `STAP_LOG_USER`/`STAP_LOG_PASSWORD`) deve
-avere accesso alle share amministrative `C$` dei PC monitorati.
+Damit die Funktion „Benutzer prüfen" / Neustart funktioniert, muss das Konto,
+unter dem der Server läuft (der Benutzer `-ServiceUser` oder
+`STAP_LOG_USER`/`STAP_LOG_PASSWORD`), Zugriff auf die administrativen
+`C$`-Freigaben der überwachten PCs haben.
 
 ---
 
 ## 4. Firewall
 
-Se non hai usato `-OpenFirewall`, apri la porta a mano (PowerShell admin):
+Wenn du `-OpenFirewall` nicht verwendet hast, öffne den Port manuell (PowerShell
+als Admin):
 
 ```powershell
 New-NetFirewallRule -DisplayName "Pulsar (3021)" -Direction Inbound `
@@ -117,29 +124,29 @@ New-NetFirewallRule -DisplayName "Pulsar (3021)" -Direction Inbound `
 
 ---
 
-## 5. Accesso dagli altri PC
+## 5. Zugriff von den anderen PCs
 
-1. Sul PC host trova l'IP della rete locale:
+1. Ermittle auf dem Host-PC die IP-Adresse im lokalen Netzwerk:
 
    ```powershell
-   ipconfig   # cerca "IPv4 Address", es. 192.168.1.50
+   ipconfig   # suche "IPv4-Adresse", z. B. 192.168.1.50
    ```
 
-2. Dagli altri PC apri il browser su:
+2. Öffne auf den anderen PCs den Browser unter:
 
    ```
    http://192.168.1.50:3021
    ```
 
-3. Il **primo accesso** avvia la procedura guidata per creare l'account admin.
+3. Der **erste Zugriff** startet den Assistenten zum Anlegen des Admin-Kontos.
 
-> 💡 Assegna al PC host un **IP fisso** (statico o reservation sul router),
-> altrimenti l'indirizzo può cambiare e gli altri PC perderebbero l'accesso.
-> In alternativa usa il nome host: `http://nome-pc:3021`.
+> 💡 Gib dem Host-PC eine **feste IP** (statisch oder Reservierung am Router),
+> sonst kann sich die Adresse ändern und die anderen PCs verlieren den Zugriff.
+> Alternativ verwende den Hostnamen: `http://pc-name:3021`.
 
 ---
 
-## 6. Gestione del servizio
+## 6. Verwaltung des Dienstes
 
 ```powershell
 Start-Service   Pulsar
@@ -148,51 +155,53 @@ Restart-Service Pulsar
 Get-Service     Pulsar
 ```
 
-Log del servizio: `server/logs/pulsar.out.log` e `server/logs/pulsar.err.log`.
+Dienst-Logs: `server/logs/pulsar.out.log` und `server/logs/pulsar.err.log`.
 
-Vantaggi del servizio Windows: si avvia al boot **senza login**, riparte da solo
-in caso di crash, gira senza terminale aperto e sotto un account con i permessi
-giusti per STAP.
+Vorteile des Windows-Dienstes: startet beim Booten **ohne Anmeldung**, startet bei
+einem Absturz von selbst neu, läuft ohne offenes Terminal und unter einem Konto
+mit den richtigen Rechten für STAP.
 
 ---
 
-## 7. Aggiornare Pulsar
+## 7. Pulsar aktualisieren
 
-Dopo un `git pull` o modifiche al codice, usa **`update.ps1`** (PowerShell admin):
+Nach einem `git pull` oder Codeänderungen verwende **`update.ps1`** (PowerShell
+als Admin):
 
 ```powershell
-.\scripts\update.ps1          # ferma servizio -> rebuild veloce -> riavvia
-.\scripts\update.ps1 -Full    # come sopra ma con "npm install" (se sono cambiate le dipendenze)
+.\scripts\update.ps1          # Dienst stoppen -> schneller Rebuild -> neu starten
+.\scripts\update.ps1 -Full    # wie oben, aber mit "npm install" (wenn sich Abhängigkeiten geändert haben)
 ```
 
-Se Pulsar è in avvio manuale (senza servizio), `update.ps1` fa solo il rebuild:
-poi rilancia `cd server ; npm start`.
+Läuft Pulsar im manuellen Modus (ohne Dienst), macht `update.ps1` nur den
+Rebuild: danach `cd server ; npm start` erneut ausführen.
 
 ---
 
 ## 8. Backup
 
-Tutti i dati stanno in un unico file SQLite:
+Alle Daten liegen in einer einzigen SQLite-Datei:
 
 ```
 server/data/uptime.db
 ```
 
-Per il backup, ferma il servizio (o copia a caldo) e archivia quel file.
-Ripristino: rimetti il file e riavvia.
+Für das Backup den Dienst stoppen (oder heiß kopieren) und diese Datei sichern.
+Wiederherstellung: die Datei zurückspielen und neu starten.
 
 ---
 
-## 9. Sviluppo (per riferimento)
+## 9. Entwicklung (zur Referenz)
 
-Per lavorare sul codice, non in produzione, c'è `scripts/dev.sh` (Git Bash): avvia server
-(`:3021`) e client (`:5173`) in modalità dev con ricaricamento automatico. In
-questa modalità la UI passa dal dev server Vite, **non** da `server/public`.
+Zum Arbeiten am Code, nicht für die Produktion, gibt es `scripts/dev.sh` (Git
+Bash): startet Server (`:3021`) und Client (`:5173`) im Dev-Modus mit
+automatischem Neuladen. In diesem Modus kommt die UI vom Vite-Dev-Server,
+**nicht** aus `server/public`.
 
 ---
 
-## Nota su Docker
+## Hinweis zu Docker
 
-Il setup Docker è stato **rimosso** dal repository. Il deploy è esclusivamente
-nativo (questa guida), perché STAP usa le share SMB di Windows e non funziona in
-un container Linux.
+Das Docker-Setup wurde aus dem Repository **entfernt**. Das Deployment erfolgt
+ausschließlich nativ (diese Anleitung), weil STAP die SMB-Freigaben von Windows
+nutzt und in einem Linux-Container nicht funktioniert.
