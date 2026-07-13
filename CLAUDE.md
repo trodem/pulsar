@@ -51,10 +51,13 @@ npm run build    # vue-tsc -b && vite build -> client/dist
 ```
 
 The `--nousers` flag hides every "Online users" button (remote-log read, `http-ping`
-only) across the client. npm exposes the flag as `process.env.npm_config_nousers`;
-`vite.config.ts` reads it and injects the `__HIDE_USERS__` compile-time constant,
-surfaced as `HIDE_USERS` from `src/config.ts` and used in each button's `v-if`. It is
-build-time, so it also applies to `npm run build --nousers`. UI-only — the server
+only) across the client. `vite.config.ts` turns it into the `__HIDE_USERS__`
+compile-time constant, surfaced as `HIDE_USERS` from `src/config.ts` and used in each
+button's `v-if`. Two trigger paths feed `vite.config.ts`: the env var
+`PULSAR_NO_USERS` (the robust path — the scripts set it) or `npm_config_nousers` (what
+npm derives from a bare `npm run dev --nousers`; npm warns this config path is going
+away, so it's only a convenience fallback). It is build-time, so it also applies to
+`npm run build`. UI-only — the server
 `check-users` endpoint stays reachable.
 
 ### Production deploy (native Windows, from repo root)

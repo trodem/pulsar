@@ -1,10 +1,25 @@
 import { defineConfig } from "vite";
 import vue from "@vitejs/plugin-vue";
 
-// Flag "Online-Benutzer ausblenden": aktiv, wenn der Dev-Server mit
-// `npm run dev --nousers` gestartet wird. npm legt für unbekannte Flags eine
-// Config-Variable an, die als `npm_config_nousers` in der Umgebung landet.
-const hideUsers = !!process.env.npm_config_nousers;
+// Prüft, ob eine Umgebungsvariable "gesetzt" ist (nicht leer, nicht "0"/"false").
+function isEnvFlag(value: string | undefined): boolean {
+  return (
+    value !== undefined &&
+    value !== "" &&
+    value !== "0" &&
+    value.toLowerCase() !== "false"
+  );
+}
+
+// Flag "Online-Benutzer ausblenden". Zwei Wege, beide führen hierher:
+//   1. PULSAR_NO_USERS=1 — der robuste Weg, von den Skripten gesetzt
+//      (deploy.ps1 -NoUsers, dev.sh --nousers).
+//   2. `npm run dev --nousers` — Komfort für den direkten Aufruf; npm legt
+//      dafür die Config-Variable `npm_config_nousers` an. npm verwirft diesen
+//      Weg in einer künftigen Major-Version (Warnung), daher nur als Fallback.
+const hideUsers =
+  isEnvFlag(process.env.PULSAR_NO_USERS) ||
+  isEnvFlag(process.env.npm_config_nousers);
 
 export default defineConfig({
   plugins: [vue()],

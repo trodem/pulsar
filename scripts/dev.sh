@@ -32,11 +32,11 @@ stop_port() {
 
 # Flags einlesen (in beliebiger Reihenfolge kombinierbar).
 do_install=false
-client_dev_args=()
+no_users=false
 for arg in "$@"; do
     case "$arg" in
         --install) do_install=true ;;
-        --nousers) client_dev_args+=(--nousers) ;;  # an "npm run dev" durchreichen
+        --nousers) no_users=true ;;  # blendet die "Online users"-Buttons aus
         *) echo "Unbekanntes Flag: $arg" >&2; exit 1 ;;
     esac
 done
@@ -66,7 +66,13 @@ echo "Starte Server (http://localhost:3021)..."
 pids+=($!)
 
 echo "Starte Client (http://localhost:5173)..."
-(cd "$CLIENT_DIR" && npm run dev ${client_dev_args[@]+"${client_dev_args[@]}"}) &
+# Bei --nousers PULSAR_NO_USERS setzen (von client/vite.config.ts ausgelesen),
+# statt ein npm-Flag durchzureichen, das npm künftig verwirft.
+if [ "$no_users" = true ]; then
+    (cd "$CLIENT_DIR" && PULSAR_NO_USERS=1 npm run dev) &
+else
+    (cd "$CLIENT_DIR" && npm run dev) &
+fi
 pids+=($!)
 
 echo ""

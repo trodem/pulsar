@@ -145,11 +145,18 @@ if (-not $SkipInstall) {
     Write-Ok "npm install (client)…"
     Invoke-Native 'npm.cmd' @('install') $clientDir
 }
-# Bei -NoUsers das Flag --nousers an den Build durchreichen (blendet die
-# "Online users"-Buttons aus; siehe client/vite.config.ts).
-$buildArgs = if ($NoUsers) { @('run','build','--nousers') } else { @('run','build') }
-Write-Ok ("npm {0} (client)…" -f ($buildArgs -join ' '))
-Invoke-Native 'npm.cmd' $buildArgs $clientDir
+# Bei -NoUsers die "Online users"-Buttons ausblenden. Statt eines npm-Flags
+# (das npm künftig verwirft) setzen wir die Umgebungsvariable PULSAR_NO_USERS,
+# die der Client-Build in client/vite.config.ts ausliest.
+if ($NoUsers) {
+    Write-Ok "npm run build (client, ohne 'Online users'-Buttons)…"
+    $env:PULSAR_NO_USERS = '1'
+    try     { Invoke-Native 'npm.cmd' @('run','build') $clientDir }
+    finally { Remove-Item Env:\PULSAR_NO_USERS -ErrorAction SilentlyContinue }
+} else {
+    Write-Ok "npm run build (client)…"
+    Invoke-Native 'npm.cmd' @('run','build') $clientDir
+}
 
 $clientDist = Join-Path $clientDir 'dist'
 if (-not (Test-Path (Join-Path $clientDist 'index.html'))) {
