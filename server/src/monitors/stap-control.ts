@@ -6,63 +6,80 @@ import { hostFromTarget } from "./stap-users.js";
 
 const execFileAsync = promisify(execFile);
 
-// Remotely restarts the STAP backend executable on a monitor's host. Uses CIM
-// (Win32_Process) over a DCOM session through PowerShell — the same shell-out
-// approach as the `net use` SMB session in stap-users, so it needs no extra
-// tooling and no WinRM. CIM cmdlets (unlike the old Get-WmiObject/Invoke-Wmi-
-// Method) exist in both Windows PowerShell 5.1 and PowerShell 7, and the DCOM
-// session option keeps this working without WinRM enabled on the host. Any
-// running instance is terminated first, then a fresh one is started; if nothing
-// was running it just starts. The exe path lives in the config/.env
-// (STAP_EXE_PATH), never hardcoded here. Note: the process starts in the host's
-// session 0 (non-interactive), which is fine for the backend module.
+// Remotely restarts the STAP backend executable on a monitor's host over WinRM
+// (WS-Management) via PowerShell remoting (Invoke-Command). This replaces the
+// former DCOM CimSession: remote DCOM activation went through the COM Surrogate
+// (dllhost.exe) and was flagged/blocked as lateral movement by EDR tools such as
+// Cortex XDR. WinRM uses a distinct, admin-standard transport (wsmprovhost) that
+// EDRs treat far less aggressively. Requires WinRM enabled on the host
+// (Enable-PSRemoting) and, outside a domain, the host listed in the client's
+// TrustedHosts. Any running instance is terminated first, then a fresh one is
+// started; if nothing was running it just starts. The exe path lives in the
+// config/.env (STAP_EXE_PATH), never hardcoded here. The process is (re)started
+// with a *local* Win32_Process.Create inside the remote session so it detaches
+// from the WinRM session and keeps running in session 0 (non-interactive) — a
+// plain Start-Process would die as a child of wsmprovhost when the session ends.
 const RESTART_SCRIPT = `
 $ErrorActionPreference = 'Stop'
-# Repair PSModulePath before touching any cmdlet from a module: when the server
-# is launched as a Windows service / by a process manager, the inherited
-# environment can have an empty PSModulePath, which makes module autoload fail
-# with "CouldNotAutoloadMatchingModule" for Get-CimInstance & co. $PSHOME is set
-# by the engine regardless, and $PSHOME\\Modules holds CimCmdlets.
+# Repair PSModulePath before Invoke-Command touches any module-backed cmdlet:
+# when the server is launched as a Windows service / by a process manager, the
+# inherited environment can have an empty PSModulePath, which makes module
+# autoload fail with "CouldNotAutoloadMatchingModule". $PSHOME is set by the
+# engine regardless, and $PSHOME\\Modules holds the core modules.
 if (($env:PSModulePath -split ';') -notcontains "$PSHOME\\Modules") {
   $env:PSModulePath = "$PSHOME\\Modules;$env:PSModulePath"
 }
-Import-Module CimCmdlets -ErrorAction Stop
 $exe = $env:PS_EXE
-$name = Split-Path $exe -Leaf
-$opt = New-CimSessionOption -Protocol Dcom
-$params = @{ ComputerName = $env:PS_HOST; SessionOption = $opt }
+$name = [System.IO.Path]::GetFileNameWithoutExtension($exe)
+# Only pass explicit credentials when configured; otherwise the service account's
+# integrated auth (Kerberos) is used.
+$params = @{ ComputerName = $env:PS_HOST; ErrorAction = 'Stop' }
 if ($env:PS_USER) {
   $sec = ConvertTo-SecureString $env:PS_PASS -AsPlainText -Force
   $params.Credential = New-Object System.Management.Automation.PSCredential($env:PS_USER, $sec)
 }
-$session = New-CimSession @params
-try {
-  $procs = @(Get-CimInstance -CimSession $session -ClassName Win32_Process -Filter "Name='$name'")
-  foreach ($p in $procs) { [void](Invoke-CimMethod -CimSession $session -InputObject $p -MethodName Terminate) }
+$out = Invoke-Command @params -ArgumentList $exe, $name -ScriptBlock {
+  param($exe, $name)
+  $ErrorActionPreference = 'Stop'
+  $procs = @(Get-Process -Name $name -ErrorAction SilentlyContinue)
+  foreach ($p in $procs) { Stop-Process -Id $p.Id -Force }
   if ($procs.Count -gt 0) { Start-Sleep -Milliseconds 700 }
-  $res = Invoke-CimMethod -CimSession $session -ClassName Win32_Process -MethodName Create -Arguments @{ CommandLine = $exe }
+  if (-not (Test-Path -LiteralPath $exe)) { throw "Executable not found: $exe" }
+  # Local WMI create (no DCOM/CimSession) so the process detaches from this
+  # WinRM session and survives its teardown in session 0.
+  $res = Invoke-CimMethod -ClassName Win32_Process -MethodName Create -Arguments @{ CommandLine = $exe }
   if ($res.ReturnValue -ne 0) {
     $map = @{ '2' = 'Access denied'; '3' = 'Insufficient privilege'; '8' = 'Unknown failure'; '9' = ('Executable not found: ' + $exe); '21' = 'Invalid parameter' }
     $why = $map["$($res.ReturnValue)"]
     if (-not $why) { $why = "code $($res.ReturnValue)" }
     throw "Start failed: $why"
   }
-  Write-Output ("stopped=" + $procs.Count + " started_pid=" + $res.ProcessId)
-} finally {
-  Remove-CimSession $session
+  "stopped=" + $procs.Count + " started_pid=" + $res.ProcessId
 }
+Write-Output $out
 `;
 
-// Turns a CIM/PowerShell failure into a short, card-ready message.
+// Turns a WinRM/PowerShell failure into a short, card-ready message.
 function describeError(out: string): string {
+  // TrustedHosts / transport config: WinRM refuses the connection because the
+  // target isn't in TrustedHosts or HTTPS/Kerberos isn't used.
+  if (/trustedhosts|https transport must be used/i.test(out)) {
+    return "WinRM: host not in TrustedHosts (use HTTPS/Kerberos)";
+  }
+  // WinRM unreachable / not enabled: service not running, firewall blocking, or
+  // the computer name can't be resolved.
   if (
-    /rpc server is unavailable|0x800706ba|cannot connect|winrm cannot complete|not be found|unreachable/i.test(
+    /winrm cannot (complete|process)|cannot find the computer|connecting to remote server|firewall exception for the winrm|rpc server is unavailable|0x800706ba|cannot connect|not be found|unreachable/i.test(
       out,
     )
   ) {
-    return "Host unreachable";
+    return "Host unreachable or WinRM not enabled";
   }
-  if (/logon failure|user name or password|0x8007052e|1326/i.test(out)) {
+  if (
+    /logon failure|user name or password|username or password|0x8007052e|1326|0x8009030e/i.test(
+      out,
+    )
+  ) {
     return "Invalid credentials for host";
   }
   if (/access is denied|0x80070005|access denied/i.test(out)) {
