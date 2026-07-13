@@ -55,61 +55,33 @@ npm run dev                 # http://localhost:5173
 Vite proxies `/api` and `/socket.io` to the backend, so just open
 http://localhost:5173 and create your admin account on first run.
 
-## Production build
+## Production deploy (native Windows, no Docker)
 
-```bash
-cd server && npm run build && npm start     # serves API on PORT
-cd client && npm run build                  # static files in client/dist
+In production Pulsar runs as **one process on one port** (default `3021`): the
+client is built and copied into `server/public`, and the server serves the SPA,
+REST API and Socket.IO from there — no nginx, no separate port, no CORS. Native
+deploy is required for **STAP** (reading each host's logged-in users via Windows
+SMB shares), which cannot work inside a Linux container.
+
+From the repo root, in an **Administrator** PowerShell:
+
+```powershell
+.\scripts\deploy.ps1        # build client + server, copy client to server/public
+cd server ; npm start       # or install as a service (below)
 ```
 
-Serve `client/dist` behind any static host / reverse proxy pointing `/api`
-and `/socket.io` at the backend.
+Full deploy with an auto-starting Windows service (NSSM), firewall rule, and a
+service account with access to the monitored hosts' `C$` shares (for STAP):
 
-## Docker
-
-`docker compose` runs **two services**, each with its own multi-stage
-`Dockerfile`:
-
-- **server** — Node/Express API + Socket.IO on port `3021`. The runtime image
-  installs `iputils-ping` (for `ping` / `http-ping` monitors) and persists the
-  SQLite database on the `pulsar-data` named volume.
-- **client** — the Vue SPA built to static files and served by **nginx**, which
-  reverse-proxies `/api` and `/socket.io` to the server. The browser therefore
-  talks to a single origin (no CORS), and the app is published on port `8090`
-  (override with `WEB_PORT` in `.env`).
-
-Images are built **locally by docker compose** — nothing is pushed to any
-registry. Only the base `node` / `nginx` images are pulled during the build.
-
-### Run
-
-```bash
-cp .env.example .env          # set JWT_SECRET (compose refuses to start without it)
-docker compose up -d --build
+```powershell
+.\scripts\deploy.ps1 -InstallService -OpenFirewall `
+    -NssmPath "C:\Tools\nssm.exe" `
+    -ServiceUser "DOMAIN\user" -ServicePassword "..."
 ```
 
-Then open http://localhost:8090 and create your admin account.
-Stop with `docker compose down` (add `-v` to also wipe the database volume).
-
-Environment is read from `.env` and passed to the **server** service in
-`docker-compose.yml`:
-
-| Variable            | Purpose                                                      |
-| ------------------- | ----------------------------------------------------------- |
-| `JWT_SECRET`        | **Required** — signs auth tokens; compose fails if unset.   |
-| `DB_PATH`           | SQLite file path inside the container (default `./data/uptime.db`). |
-| `STAP_LOG_ENABLED`  | STAP logged-user extraction; `net use`/SMB is Windows-only, so this has no effect in the Linux container. |
-| `STAP_LOG_UNC` / `STAP_LOG_USER` / `STAP_LOG_PASSWORD` | STAP share + credentials (optional). |
-
-`CLIENT_ORIGIN` is fixed to `*` for the server because nginx proxies
-same-origin. The ICMP `ping` needs the raw-socket capability, so the server
-service is granted `cap_add: [NET_RAW]`. The API port is not published to the
-host by default (only nginx reaches it over the internal network) — uncomment
-the `ports` block in `docker-compose.yml` to expose `3021` directly.
-
-The database lives in the `pulsar-data` volume, so it survives
-`docker compose down` / image rebuilds. Remove it with
-`docker compose down -v` for a clean slate.
+Then open `http://<host-ip>:3021` from any PC on the LAN and create the admin
+account on first run. After code changes, redeploy with `.\scripts\update.ps1`
+(stop → rebuild → start). See **[setup.md](setup.md)** for the full guide.
 
 ## Notes
 

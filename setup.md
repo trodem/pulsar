@@ -191,7 +191,6 @@ questa modalità la UI passa dal dev server Vite, **non** da `server/public`.
 
 ## Nota su Docker
 
-Il repository contiene anche un setup Docker (`docker-compose.yml`, `Dockerfile`,
-`nginx.conf`). Per la modalità nativa **non serve** e puoi ignorarlo: se non lanci
-`docker compose`, quei file sono inerti. La modalità nativa è preferibile qui
-perché STAP (SMB Windows) non funziona nel container Linux.
+Il setup Docker è stato **rimosso** dal repository. Il deploy è esclusivamente
+nativo (questa guida), perché STAP usa le share SMB di Windows e non funziona in
+un container Linux.

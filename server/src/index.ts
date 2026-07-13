@@ -30,8 +30,8 @@ app.use("/api/groups", requireAuth, requireWrite, groupRoutes);
 app.use("/api/tags", requireAuth, requireWrite, tagRoutes);
 app.use("/api/maintenances", requireAuth, requireWrite, maintenanceRoutes);
 
-// In production, serve the built Vue client (copied to ../public in the image)
-// and fall back to index.html for client-side routing.
+// In production, serve the built Vue client (copied to ../public by
+// scripts/deploy.ps1) and fall back to index.html for client-side routing.
 const publicDir = resolve(dirname(fileURLToPath(import.meta.url)), "../public");
 if (existsSync(publicDir)) {
   app.use(express.static(publicDir));

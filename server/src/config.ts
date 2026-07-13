@@ -24,8 +24,8 @@ const DEFAULT_STAP_EXE_PATH =
 
 export const config = {
   port: Number(process.env.PORT || 3021),
-  // "*" reflects any origin (single-origin self-hosted / Docker deploy);
-  // otherwise a comma-separated allowlist.
+  // "*" reflects any origin (single-origin self-hosted deploy where the server
+  // also serves the client); otherwise a comma-separated allowlist.
   clientOrigin: (
     rawOrigin === "*"
       ? true

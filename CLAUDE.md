@@ -15,7 +15,7 @@ Two independent packages (no root workspace — install/run each separately):
 - `server/` — Express REST API + Socket.IO, per-monitor scheduler, SQLite via Drizzle ORM. ESM, run with `tsx`.
 - `client/` — Vue 3 SPA (Vite, Pinia, Vue Router). Dev server proxies `/api` and `/socket.io` to the backend.
 
-`docker compose` runs the two packages as **two services**: `server/Dockerfile` builds the API image, and `client/Dockerfile` builds the SPA and serves it with nginx (`client/nginx.conf`), reverse-proxying `/api` and `/socket.io` to the server. The client is published on port `8090` (override with `WEB_PORT`). The server still contains fallback code to serve a static client from `server/public` if that dir exists (single-image mode), but the compose setup does not use it.
+**Deployment is native (no Docker).** In production the client is compiled (`npm run build` → `client/dist`) and copied into `server/public`; the server then serves the SPA, REST API and Socket.IO all from **one process on one port** (default `3021`) — `src/index.ts` serves `../public` via `express.static` when that dir exists. No nginx, no separate client port, no CORS. On Windows this keeps STAP working (SMB shares), which a Linux container cannot do. See `setup.md` and the `scripts/` folder: `deploy.ps1` (build + optional NSSM Windows service + firewall + `.env` bootstrap), `update.ps1` (stop → rebuild → start), `dev.sh` (dev mode: server `:3021` + Vite client `:5173`).
 
 ### Backend flow
 - `src/index.ts` — boot: `initSchema()` → mount routes (`/api/auth`, `/api/monitors`, `/api/notifications`) → `initSocket()` → `startScheduler()`.
@@ -49,11 +49,13 @@ npm run dev      # vite, http://localhost:5173
 npm run build    # vue-tsc -b && vite build -> client/dist
 ```
 
-### Docker (two services: nginx-served client + API server)
-```bash
-cp .env.example .env           # set JWT_SECRET (compose fails without it)
-docker compose up -d --build   # http://localhost:8090
+### Production deploy (native Windows, from repo root)
+```powershell
+.\scripts\deploy.ps1                       # build client+server, copy client to server/public
+.\scripts\deploy.ps1 -InstallService -OpenFirewall -ServiceUser "DOMAIN\user" -ServicePassword "..."
+.\scripts\update.ps1                       # after code changes: stop -> rebuild -> start
 ```
+Served on one port (default `3021`); reachable on the LAN at `http://<host-ip>:3021`. See `setup.md`.
 
 ## Configuration
 
@@ -63,7 +65,7 @@ Server reads `.env` from its CWD via `process.loadEnvFile` (see `src/config.ts`)
 - `JWT_SECRET` — **must be changed in production**; signs auth tokens.
 - STAP log/user extraction: `STAP_LOG_ENABLED`, `STAP_LOG_UNC` (`{host}` is substituted), `STAP_LOG_USER`, `STAP_LOG_PASSWORD`.
 
-**`server/.env` is gitignored and holds real credentials — never commit it or copy its secrets into tracked files (`.env.example`, docs, code).**
+**`server/.env` is gitignored and holds real credentials — never commit it or copy its secrets into tracked files (docs, code). `scripts/deploy.ps1` bootstraps a `server/.env` with a random `JWT_SECRET` if none exists.**
 
 ## Conventions
 
