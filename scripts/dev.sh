@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# dev.sh — avvia (o riavvia) server e client Pulsar in modalità dev, senza Docker.
+# dev.sh — startet (oder startet neu) Server und Client von Pulsar im Dev-Modus, ohne Docker.
 #
-# Uso:
-#   ./dev.sh            avvia server (:3021) e client (:5173)
-#   ./dev.sh --install  esegue "npm install" in server/ e client/ prima di avviare
+# Verwendung:
+#   ./dev.sh            startet Server (:3021) und Client (:5173)
+#   ./dev.sh --install  führt vor dem Start "npm install" in server/ und client/ aus
 #
-# Entrambi girano nello stesso terminale; Ctrl+C ferma tutto.
-# Prima di avviare, libera le porte se già occupate (riavvio pulito).
+# Beide laufen im selben Terminal; Ctrl+C stoppt alles.
+# Vor dem Start werden die Ports freigegeben, falls sie belegt sind (sauberer Neustart).
 
 set -euo pipefail
 
@@ -15,7 +15,7 @@ SERVER_DIR="$ROOT/server"
 CLIENT_DIR="$ROOT/client"
 
 stop_port() {
-    # Chiude qualsiasi processo in ascolto sulla porta (riavvio pulito).
+    # Beendet jeden Prozess, der auf dem Port lauscht (sauberer Neustart).
     local port="$1" pids=""
     if command -v lsof >/dev/null 2>&1; then
         pids="$(lsof -ti tcp:"$port" 2>/dev/null || true)"
@@ -23,39 +23,39 @@ stop_port() {
         pids="$(fuser "$port"/tcp 2>/dev/null || true)"
     fi
     if [ -n "$pids" ]; then
-        echo "Porta $port liberata (PID $pids)"
+        echo "Port $port freigegeben (PID $pids)"
         kill -9 $pids 2>/dev/null || true
     fi
 }
 
 if [ "${1:-}" = "--install" ]; then
-    echo "npm install nel server..."
+    echo "npm install im Server..."
     (cd "$SERVER_DIR" && npm install)
-    echo "npm install nel client..."
+    echo "npm install im Client..."
     (cd "$CLIENT_DIR" && npm install)
 fi
 
-echo "Riavvio: libero le porte 3021 e 5173..."
+echo "Neustart: gebe die Ports 3021 und 5173 frei..."
 stop_port 3021
 stop_port 5173
 
-# Alla chiusura (Ctrl+C) ferma entrambi i processi figli.
+# Beim Beenden (Ctrl+C) beide Kindprozesse stoppen.
 pids=()
 cleanup() {
     echo ""
-    echo "Arresto server e client..."
+    echo "Stoppe Server und Client..."
     kill "${pids[@]}" 2>/dev/null || true
 }
 trap cleanup EXIT INT TERM
 
-echo "Avvio server (http://localhost:3021)..."
+echo "Starte Server (http://localhost:3021)..."
 (cd "$SERVER_DIR" && npm run dev) &
 pids+=($!)
 
-echo "Avvio client (http://localhost:5173)..."
+echo "Starte Client (http://localhost:5173)..."
 (cd "$CLIENT_DIR" && npm run dev) &
 pids+=($!)
 
 echo ""
-echo "Server e client avviati. Ctrl+C per fermare entrambi."
+echo "Server und Client gestartet. Ctrl+C zum Stoppen beider."
 wait

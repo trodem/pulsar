@@ -1,26 +1,26 @@
-<#
+﻿<#
 .SYNOPSIS
-    Aggiorna Pulsar (deploy nativo Windows) dopo una modifica al codice.
+    Aktualisiert Pulsar (natives Windows-Deployment) nach einer Codeänderung.
 
 .DESCRIPTION
-    Ferma il servizio (se presente), ricompila client + server tramite deploy.ps1
-    e riavvia il servizio. Da usare dopo un "git pull" o modifiche locali.
+    Stoppt den Dienst (falls vorhanden), baut Client + Server über deploy.ps1 neu und
+    startet den Dienst wieder. Nach einem "git pull" oder lokalen Änderungen verwenden.
 
-    - Se Pulsar gira come servizio Windows: stop -> rebuild -> start.
-    - Se gira in avvio manuale: solo rebuild, poi ricordati di rilanciare
-      "cd server ; npm start".
+    - Wenn Pulsar als Windows-Dienst läuft: stop -> rebuild -> start.
+    - Wenn es im manuellen Start läuft: nur rebuild, danach daran denken,
+      "cd server ; npm start" erneut auszuführen.
 
 .PARAMETER Full
-    Esegue anche "npm install" (usalo quando sono cambiate le dipendenze, cioe
-    package.json). Senza questo flag il rebuild salta l'install ed e piu veloce.
+    Führt auch "npm install" aus (verwenden, wenn sich die Abhängigkeiten geändert haben,
+    also package.json). Ohne dieses Flag überspringt der Rebuild den Install und ist schneller.
 
 .EXAMPLE
     .\update.ps1
-    # rebuild veloce e riavvio servizio
+    # schneller Rebuild und Dienst-Neustart
 
 .EXAMPLE
     .\update.ps1 -Full
-    # dopo un aggiornamento che ha toccato le dipendenze
+    # nach einem Update, das die Abhängigkeiten berührt hat
 #>
 
 [CmdletBinding()]
@@ -30,36 +30,36 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $ServiceName = 'Pulsar'
-$deploy      = Join-Path $PSScriptRoot 'deploy.ps1'   # accanto a update.ps1, in scripts/
+$deploy      = Join-Path $PSScriptRoot 'deploy.ps1'   # neben update.ps1, in scripts/
 
-if (-not (Test-Path $deploy)) { throw "deploy.ps1 non trovato accanto a update.ps1." }
+if (-not (Test-Path $deploy)) { throw "deploy.ps1 nicht neben update.ps1 gefunden." }
 
 $svc = Get-Service $ServiceName -ErrorAction SilentlyContinue
 
 if ($svc) {
-    Write-Host "==> Fermo il servizio '$ServiceName'…" -ForegroundColor Cyan
+    Write-Host "==> Stoppe den Dienst '$ServiceName'…" -ForegroundColor Cyan
     Stop-Service $ServiceName
     (Get-Service $ServiceName).WaitForStatus('Stopped', '00:00:30')
-    Write-Host "    Servizio fermato." -ForegroundColor Green
+    Write-Host "    Dienst gestoppt." -ForegroundColor Green
 } else {
-    Write-Host "==> Nessun servizio '$ServiceName' installato: eseguo solo il rebuild." -ForegroundColor Yellow
+    Write-Host "==> Kein Dienst '$ServiceName' installiert: führe nur den Rebuild aus." -ForegroundColor Yellow
 }
 
-# Rebuild (salta npm install a meno che -Full).
+# Rebuild (überspringt npm install, außer bei -Full).
 if ($Full) {
     & $deploy
 } else {
     & $deploy -SkipInstall
 }
 if ($LASTEXITCODE -ne 0 -and $null -ne $LASTEXITCODE) {
-    throw "deploy.ps1 ha restituito un errore ($LASTEXITCODE)."
+    throw "deploy.ps1 hat einen Fehler zurückgegeben ($LASTEXITCODE)."
 }
 
 if ($svc) {
-    Write-Host "==> Riavvio il servizio '$ServiceName'…" -ForegroundColor Cyan
+    Write-Host "==> Starte den Dienst '$ServiceName' neu…" -ForegroundColor Cyan
     Start-Service $ServiceName
     (Get-Service $ServiceName).WaitForStatus('Running', '00:00:30')
-    Write-Host "    Servizio in esecuzione." -ForegroundColor Green
+    Write-Host "    Dienst läuft." -ForegroundColor Green
 } else {
-    Write-Host "==> Rebuild completato. Avvio manuale: cd server ; npm start" -ForegroundColor Gray
+    Write-Host "==> Rebuild abgeschlossen. Manueller Start: cd server ; npm start" -ForegroundColor Gray
 }
