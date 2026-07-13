@@ -1,57 +1,57 @@
-<#
+﻿<#
 .SYNOPSIS
-    Build e deploy nativo di Pulsar su Windows (senza Docker).
+    Build und natives Deployment von Pulsar unter Windows (ohne Docker).
 
 .DESCRIPTION
-    Compila il client Vue, lo copia in server/public, compila il server e
-    (opzionale) lo registra come servizio Windows con NSSM, apre la porta nel
-    firewall e genera un server/.env se manca.
+    Kompiliert den Vue-Client, kopiert ihn nach server/public, kompiliert den Server
+    und registriert ihn (optional) als Windows-Dienst mit NSSM, öffnet den Port in der
+    Firewall und erzeugt eine server/.env, falls sie fehlt.
 
-    Percorso "un solo processo, una sola porta": la UI, le API e il socket
-    vengono serviti tutti dal server Node sulla porta configurata (default 3021).
+    Ansatz "ein Prozess, ein Port": UI, API und Socket werden alle vom Node-Server
+    auf dem konfigurierten Port ausgeliefert (Standard 3021).
 
 .PARAMETER Port
-    Porta su cui gira il server (default 3021). Usata per il firewall e mostrata
-    a fine deploy. Deve corrispondere a PORT nel server/.env.
+    Port, auf dem der Server läuft (Standard 3021). Wird für die Firewall verwendet und
+    am Ende des Deployments angezeigt. Muss mit PORT in server/.env übereinstimmen.
 
 .PARAMETER InstallService
-    Registra Pulsar come servizio Windows tramite NSSM (avvio automatico al boot,
-    riavvio in caso di crash). Richiede nssm.exe (vedi -NssmPath).
+    Registriert Pulsar als Windows-Dienst über NSSM (automatischer Start beim Booten,
+    Neustart bei Absturz). Benötigt nssm.exe (siehe -NssmPath).
 
 .PARAMETER NssmPath
-    Percorso di nssm.exe. Se non specificato lo cerca nel PATH.
+    Pfad zu nssm.exe. Ohne Angabe wird im PATH gesucht.
 
 .PARAMETER ServiceUser
-    Account sotto cui gira il servizio (es. "DOMINIO\utente"). Utile per dare al
-    servizio i permessi di accesso alle share C$ dei PC monitorati (funzione STAP).
+    Konto, unter dem der Dienst läuft (z. B. "DOMAENE\benutzer"). Nützlich, um dem Dienst
+    die Zugriffsrechte auf die C$-Freigaben der überwachten PCs zu geben (STAP-Funktion).
 
 .PARAMETER ServicePassword
-    Password dell'account -ServiceUser.
+    Passwort des Kontos -ServiceUser.
 
 .PARAMETER OpenFirewall
-    Crea una regola firewall inbound per la porta.
+    Erstellt eine eingehende Firewallregel für den Port.
 
 .PARAMETER SkipInstall
-    Salta "npm install" nei due package (usalo per ri-build veloci quando le
-    dipendenze sono gia installate).
+    Überspringt "npm install" in beiden Paketen (für schnelle Re-Builds, wenn die
+    Abhängigkeiten bereits installiert sind).
 
 .PARAMETER Start
-    Dopo il build avvia subito il server in primo piano (node dist/index.js),
-    senza installare un servizio. Utile per far tutto con un solo comando quando
-    non vuoi (o non hai) NSSM. Ctrl+C per fermarlo. Ignorato con -InstallService
-    (in quel caso il servizio parte da solo).
+    Startet nach dem Build den Server direkt im Vordergrund (node dist/index.js), ohne
+    einen Dienst zu installieren. Praktisch, um alles mit einem einzigen Befehl zu
+    erledigen, wenn du NSSM nicht willst (oder nicht hast). Ctrl+C zum Beenden. Wird mit
+    -InstallService ignoriert (in dem Fall startet der Dienst von selbst).
 
 .EXAMPLE
-    # Build + avvio immediato in primo piano (un comando solo, niente servizio)
+    # Build + sofortiger Start im Vordergrund (ein einziger Befehl, kein Dienst)
     .\deploy.ps1 -Start -OpenFirewall
 
 .EXAMPLE
-    # Solo build (client + server), niente avvio
+    # Nur Build (Client + Server), kein Start
     .\deploy.ps1
 
 .EXAMPLE
-    # Build + servizio Windows con account per STAP + firewall aperto
-    .\deploy.ps1 -InstallService -OpenFirewall -ServiceUser "AZIENDA\svc_pulsar" -ServicePassword "..."
+    # Build + Windows-Dienst mit Konto für STAP + geöffnete Firewall
+    .\deploy.ps1 -InstallService -OpenFirewall -ServiceUser "FIRMA\svc_pulsar" -ServicePassword "..."
 #>
 
 [CmdletBinding()]
@@ -68,7 +68,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $ServiceName = 'Pulsar'
-$root        = Split-Path $PSScriptRoot -Parent   # gli script stanno in scripts/, la root e la cartella superiore
+$root        = Split-Path $PSScriptRoot -Parent   # die Skripte liegen in scripts/, die Root ist der übergeordnete Ordner
 $clientDir   = Join-Path $root 'client'
 $serverDir   = Join-Path $root 'server'
 $publicDir   = Join-Path $serverDir 'public'
@@ -77,14 +77,17 @@ function Write-Step  ([string]$m) { Write-Host "`n==> $m" -ForegroundColor Cyan 
 function Write-Ok    ([string]$m) { Write-Host "    $m"   -ForegroundColor Green }
 function Write-Warn2 ([string]$m) { Write-Host "    $m"   -ForegroundColor Yellow }
 
-# Esegue un comando nativo e si ferma se ritorna un exit code diverso da 0.
+# Führt einen nativen Befehl aus und bricht ab, wenn der Exit-Code ungleich 0 ist.
 function Invoke-Native {
-    param([string]$File, [string[]]$Args, [string]$WorkDir)
+    # $Arguments statt $Args: $Args ist eine automatische PowerShell-Variable — als
+    # Parametername würde der Splat "@Args" die (leere) Automatik-Variable verwenden und
+    # das eigentliche Argument (z. B. "install") ginge verloren.
+    param([string]$File, [string[]]$Arguments, [string]$WorkDir)
     Push-Location $WorkDir
     try {
-        & $File @Args
+        & $File @Arguments
         if ($LASTEXITCODE -ne 0) {
-            throw "Comando fallito ($File $($Args -join ' ')) con exit code $LASTEXITCODE"
+            throw "Befehl fehlgeschlagen ($File $($Arguments -join ' ')) mit Exit-Code $LASTEXITCODE"
         }
     } finally {
         Pop-Location
@@ -92,46 +95,46 @@ function Invoke-Native {
 }
 
 # ---------------------------------------------------------------------------
-Write-Step "Controllo prerequisiti"
+Write-Step "Prüfe Voraussetzungen"
 # ---------------------------------------------------------------------------
 $node = Get-Command node -ErrorAction SilentlyContinue
 $npm  = Get-Command npm.cmd -ErrorAction SilentlyContinue
-if (-not $node) { throw "Node.js non trovato nel PATH. Installa Node.js LTS 22 da https://nodejs.org" }
-if (-not $npm)  { throw "npm non trovato nel PATH." }
+if (-not $node) { throw "Node.js nicht im PATH gefunden. Installiere Node.js LTS 22 von https://nodejs.org" }
+if (-not $npm)  { throw "npm nicht im PATH gefunden." }
 
 $nodeVersion = (& node --version).TrimStart('v')
 $nodeMajor   = [int]($nodeVersion.Split('.')[0])
 $nodeMinor   = [int]($nodeVersion.Split('.')[1])
 if ($nodeMajor -lt 20 -or ($nodeMajor -eq 20 -and $nodeMinor -lt 12)) {
-    throw "Node $nodeVersion troppo vecchio: serve >= 20.12 (consigliato 22 LTS) per process.loadEnvFile."
+    throw "Node $nodeVersion zu alt: benötigt >= 20.12 (empfohlen 22 LTS) für process.loadEnvFile."
 }
 Write-Ok "Node $nodeVersion  |  npm $((& npm.cmd --version))"
 
 # ---------------------------------------------------------------------------
-Write-Step "Verifico server/.env"
+Write-Step "Prüfe server/.env"
 # ---------------------------------------------------------------------------
 $envFile = Join-Path $serverDir '.env'
 if (-not (Test-Path $envFile)) {
-    Write-Warn2 "server/.env mancante: ne genero uno con un JWT_SECRET casuale."
+    Write-Warn2 "server/.env fehlt: erzeuge eine mit einem zufälligen JWT_SECRET."
     $secret = [Convert]::ToBase64String((1..48 | ForEach-Object { Get-Random -Maximum 256 }))
     @"
 PORT=$Port
 JWT_SECRET=$secret
 DB_PATH=./data/uptime.db
 
-# STAP — utenti loggati / restart (solo monitor http-ping). Compila con i valori reali.
+# STAP — eingeloggte Benutzer / Neustart (nur http-ping-Monitore). Mit den echten Werten ausfüllen.
 STAP_LOG_ENABLED=true
 STAP_LOG_USER=
 STAP_LOG_PASSWORD=
-# STAP_LOG_UNC=   # lascia il default se il path e quello standard
+# STAP_LOG_UNC=   # Standard lassen, wenn der Pfad der Standardpfad ist
 "@ | Set-Content -Path $envFile -Encoding UTF8
-    Write-Ok "Creato server/.env — ricordati di compilare STAP_LOG_USER / STAP_LOG_PASSWORD."
+    Write-Ok "server/.env erstellt — denke daran, STAP_LOG_USER / STAP_LOG_PASSWORD auszufüllen."
 } else {
-    Write-Ok "server/.env presente (non lo tocco)."
+    Write-Ok "server/.env vorhanden (bleibt unberührt)."
 }
 
 # ---------------------------------------------------------------------------
-Write-Step "Build del client (Vue)"
+Write-Step "Build des Clients (Vue)"
 # ---------------------------------------------------------------------------
 if (-not $SkipInstall) {
     Write-Ok "npm install (client)…"
@@ -142,21 +145,21 @@ Invoke-Native 'npm.cmd' @('run','build') $clientDir
 
 $clientDist = Join-Path $clientDir 'dist'
 if (-not (Test-Path (Join-Path $clientDist 'index.html'))) {
-    throw "Build client non riuscita: $clientDist/index.html non trovato."
+    throw "Client-Build fehlgeschlagen: $clientDist/index.html nicht gefunden."
 }
 
 # ---------------------------------------------------------------------------
-Write-Step "Copio il client in server/public"
+Write-Step "Kopiere den Client nach server/public"
 # ---------------------------------------------------------------------------
 if (Test-Path $publicDir) {
-    Remove-Item -Recurse -Force $publicDir   # pulizia dei vecchi asset
+    Remove-Item -Recurse -Force $publicDir   # Aufräumen der alten Assets
 }
 New-Item -ItemType Directory -Force $publicDir | Out-Null
 Copy-Item -Recurse -Force (Join-Path $clientDist '*') $publicDir
-Write-Ok "Client copiato in $publicDir"
+Write-Ok "Client kopiert nach $publicDir"
 
 # ---------------------------------------------------------------------------
-Write-Step "Build del server (TypeScript)"
+Write-Step "Build des Servers (TypeScript)"
 # ---------------------------------------------------------------------------
 if (-not $SkipInstall) {
     Write-Ok "npm install (server)…"
@@ -167,43 +170,68 @@ Invoke-Native 'npm.cmd' @('run','build') $serverDir
 
 $serverEntry = Join-Path $serverDir 'dist\index.js'
 if (-not (Test-Path $serverEntry)) {
-    throw "Build server non riuscita: $serverEntry non trovato."
+    throw "Server-Build fehlgeschlagen: $serverEntry nicht gefunden."
 }
-Write-Ok "Server compilato: $serverEntry"
+Write-Ok "Server kompiliert: $serverEntry"
 
 # ---------------------------------------------------------------------------
 if ($OpenFirewall) {
-    Write-Step "Apro la porta $Port nel firewall"
+    Write-Step "Öffne Port $Port in der Firewall"
     $ruleName = "Pulsar ($Port)"
     if (Get-NetFirewallRule -DisplayName $ruleName -ErrorAction SilentlyContinue) {
-        Write-Ok "Regola firewall gia presente."
+        Write-Ok "Firewallregel bereits vorhanden."
     } else {
-        New-NetFirewallRule -DisplayName $ruleName -Direction Inbound `
-            -Protocol TCP -LocalPort $Port -Action Allow | Out-Null
-        Write-Ok "Regola firewall creata (TCP $Port inbound)."
+        # New-NetFirewallRule benötigt Administratorrechte. Läuft das Skript nicht erhöht,
+        # erzeugen wir die Regel über eine eigene elevierte Instanz (UAC-Abfrage), statt
+        # mit "Zugriff verweigert" zu scheitern.
+        $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltinRole]::Administrator)
+        $fwCmd = "New-NetFirewallRule -DisplayName '$ruleName' -Direction Inbound -Protocol TCP -LocalPort $Port -Action Allow | Out-Null"
+        if ($isAdmin) {
+            New-NetFirewallRule -DisplayName $ruleName -Direction Inbound `
+                -Protocol TCP -LocalPort $Port -Action Allow | Out-Null
+        } else {
+            Write-Warn2 "Keine Administratorrechte: die Firewallregel wird über eine elevierte Instanz erstellt (UAC-Abfrage bestätigen)."
+            $p = Start-Process -FilePath 'powershell.exe' -Verb RunAs -Wait -PassThru `
+                -ArgumentList '-NoProfile', '-Command', $fwCmd
+            if ($p.ExitCode -ne 0) {
+                throw "Firewallregel konnte nicht erstellt werden (elevierter Prozess Exit-Code $($p.ExitCode)). Starte das Skript als Administrator."
+            }
+        }
+        # Erst nach echter Prüfung Erfolg melden — CIM-Cmdlets liefern Fehler, die
+        # $ErrorActionPreference='Stop' nicht immer abfangen, sonst würde ein Fehlschlag
+        # fälschlich als Erfolg ausgegeben.
+        if (Get-NetFirewallRule -DisplayName $ruleName -ErrorAction SilentlyContinue) {
+            Write-Ok "Firewallregel erstellt (TCP $Port eingehend)."
+        } else {
+            throw "Firewallregel wurde nicht erstellt (Port $Port)."
+        }
     }
 }
 
 # ---------------------------------------------------------------------------
 if ($InstallService) {
-    Write-Step "Registro il servizio Windows '$ServiceName' (NSSM)"
+    Write-Step "Registriere den Windows-Dienst '$ServiceName' (NSSM)"
     $nssm = $NssmPath
-    if (-not $nssm) { $nssm = (Get-Command nssm -ErrorAction SilentlyContinue)?.Source }
+    if (-not $nssm) {
+        # Kein ?.-Operator: der ist erst ab PowerShell 7 verfügbar, dieses Skript läuft auch unter Windows PowerShell 5.1.
+        $nssmCmd = Get-Command nssm -ErrorAction SilentlyContinue
+        if ($nssmCmd) { $nssm = $nssmCmd.Source }
+    }
     if (-not $nssm -or -not (Test-Path $nssm)) {
-        throw "nssm.exe non trovato. Scaricalo da https://nssm.cc e passa -NssmPath 'C:\percorso\nssm.exe'."
+        throw "nssm.exe nicht gefunden. Lade es von https://nssm.cc und übergib -NssmPath 'C:\pfad\nssm.exe'."
     }
 
     $nodeExe = (Get-Command node).Source
     $logDir  = Join-Path $serverDir 'logs'
     New-Item -ItemType Directory -Force $logDir | Out-Null
 
-    # Se esiste gia lo fermo e riconfiguro (idempotente).
+    # Falls bereits vorhanden, stoppen und neu konfigurieren (idempotent).
     if (Get-Service $ServiceName -ErrorAction SilentlyContinue) {
-        Write-Warn2 "Servizio gia esistente: lo fermo e riconfiguro."
+        Write-Warn2 "Dienst bereits vorhanden: wird gestoppt und neu konfiguriert."
         & $nssm stop $ServiceName | Out-Null
     } else {
         & $nssm install $ServiceName $nodeExe 'dist\index.js'
-        if ($LASTEXITCODE -ne 0) { throw "nssm install fallito ($LASTEXITCODE)." }
+        if ($LASTEXITCODE -ne 0) { throw "nssm install fehlgeschlagen ($LASTEXITCODE)." }
     }
 
     & $nssm set $ServiceName AppDirectory   $serverDir            | Out-Null
@@ -212,40 +240,40 @@ if ($InstallService) {
     & $nssm set $ServiceName AppStdout      (Join-Path $logDir 'pulsar.out.log') | Out-Null
     & $nssm set $ServiceName AppStderr      (Join-Path $logDir 'pulsar.err.log') | Out-Null
     & $nssm set $ServiceName AppRotateFiles 1                     | Out-Null
-    & $nssm set $ServiceName AppRotateBytes 10485760              | Out-Null  # ruota a 10 MB
+    & $nssm set $ServiceName AppRotateBytes 10485760              | Out-Null  # rotiert bei 10 MB
 
     if ($ServiceUser) {
-        if (-not $ServicePassword) { throw "-ServiceUser richiede anche -ServicePassword." }
+        if (-not $ServicePassword) { throw "-ServiceUser benötigt auch -ServicePassword." }
         & $nssm set $ServiceName ObjectName $ServiceUser $ServicePassword | Out-Null
-        Write-Ok "Servizio configurato per girare come $ServiceUser (utile per STAP)."
+        Write-Ok "Dienst konfiguriert, um als $ServiceUser zu laufen (nützlich für STAP)."
     }
 
     & $nssm start $ServiceName | Out-Null
     Start-Sleep -Seconds 2
     $svc = Get-Service $ServiceName
-    Write-Ok "Servizio '$ServiceName' stato: $($svc.Status)"
+    Write-Ok "Dienst '$ServiceName' Status: $($svc.Status)"
 }
 
 # ---------------------------------------------------------------------------
-Write-Step "Fatto"
+Write-Step "Fertig"
 # ---------------------------------------------------------------------------
 $ips = (Get-NetIPAddress -AddressFamily IPv4 -ErrorAction SilentlyContinue |
         Where-Object { $_.IPAddress -notlike '127.*' -and $_.IPAddress -notlike '169.254.*' } |
         Select-Object -ExpandProperty IPAddress)
 Write-Host ""
-Write-Host "Pulsar e pronto sulla porta $Port." -ForegroundColor Green
+Write-Host "Pulsar ist bereit auf Port $Port." -ForegroundColor Green
 if (-not $InstallService) {
-    Write-Host "Avvio manuale:  cd server ; npm start" -ForegroundColor Gray
+    Write-Host "Manueller Start:  cd server ; npm start" -ForegroundColor Gray
 }
-Write-Host "Accesso dagli altri PC della rete:" -ForegroundColor Gray
+Write-Host "Zugriff von anderen PCs im Netzwerk:" -ForegroundColor Gray
 foreach ($ip in $ips) { Write-Host "    http://${ip}:$Port" -ForegroundColor White }
 if (-not $OpenFirewall) {
-    Write-Warn2 "Nota: non ho aperto il firewall. Rilancia con -OpenFirewall se gli altri PC non riescono a connettersi."
+    Write-Warn2 "Hinweis: Firewall wurde nicht geöffnet. Starte erneut mit -OpenFirewall, falls andere PCs sich nicht verbinden können."
 }
 
-# Avvio in primo piano su richiesta (solo se non stiamo installando un servizio).
+# Start im Vordergrund auf Wunsch (nur wenn kein Dienst installiert wird).
 if ($Start -and -not $InstallService) {
-    Write-Step "Avvio del server (Ctrl+C per fermare)"
-    # node dist/index.js con CWD = server, cosi legge server/.env e server/data.
+    Write-Step "Starte den Server (Ctrl+C zum Beenden)"
+    # node dist/index.js mit CWD = server, damit server/.env und server/data gelesen werden.
     Invoke-Native (Get-Command node).Source @('dist\index.js') $serverDir
 }
