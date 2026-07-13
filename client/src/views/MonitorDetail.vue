@@ -8,6 +8,7 @@ import type { Heartbeat, LogFileEntry, Monitor } from "../types";
 import HeartbeatBar from "../components/HeartbeatBar.vue";
 import MonitorForm from "../components/MonitorForm.vue";
 import { fileSize, ms, relTime, statusLabel, uptimePct } from "../format";
+import { HIDE_USERS } from "../config";
 
 const route = useRoute();
 const router = useRouter();
@@ -270,7 +271,7 @@ const events = computed(() =>
             🖥️ Remote Desktop
           </button>
           <button
-            v-if="isAdmin && monitor.type === 'http-ping'"
+            v-if="!HIDE_USERS && isAdmin && monitor.type === 'http-ping'"
             class="btn btn-sm"
             title="Read the remote log and list the logged-in users"
             :disabled="checkingUsers"

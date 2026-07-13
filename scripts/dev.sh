@@ -4,6 +4,8 @@
 # Verwendung:
 #   ./dev.sh            startet Server (:3021) und Client (:5173)
 #   ./dev.sh --install  führt vor dem Start "npm install" in server/ und client/ aus
+#   ./dev.sh --nousers  blendet im Client die "Online users"-Buttons aus
+#   Flags sind kombinierbar, z. B. ./dev.sh --install --nousers
 #
 # Beide laufen im selben Terminal; Ctrl+C stoppt alles.
 # Vor dem Start werden die Ports freigegeben, falls sie belegt sind (sauberer Neustart).
@@ -28,7 +30,18 @@ stop_port() {
     fi
 }
 
-if [ "${1:-}" = "--install" ]; then
+# Flags einlesen (in beliebiger Reihenfolge kombinierbar).
+do_install=false
+client_dev_args=()
+for arg in "$@"; do
+    case "$arg" in
+        --install) do_install=true ;;
+        --nousers) client_dev_args+=(--nousers) ;;  # an "npm run dev" durchreichen
+        *) echo "Unbekanntes Flag: $arg" >&2; exit 1 ;;
+    esac
+done
+
+if [ "$do_install" = true ]; then
     echo "npm install im Server..."
     (cd "$SERVER_DIR" && npm install)
     echo "npm install im Client..."
@@ -53,7 +66,7 @@ echo "Starte Server (http://localhost:3021)..."
 pids+=($!)
 
 echo "Starte Client (http://localhost:5173)..."
-(cd "$CLIENT_DIR" && npm run dev) &
+(cd "$CLIENT_DIR" && npm run dev ${client_dev_args[@]+"${client_dev_args[@]}"}) &
 pids+=($!)
 
 echo ""

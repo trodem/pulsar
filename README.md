@@ -51,10 +51,18 @@ Die SQLite-Datei wird automatisch unter `server/data/uptime.db` angelegt.
 cd client
 npm install
 npm run dev                 # http://localhost:5173
+npm run dev --nousers       # wie oben, blendet aber die „Online users"-Buttons aus
 ```
 
 Vite leitet `/api` und `/socket.io` an das Backend weiter, öffne also einfach
 http://localhost:5173 und lege beim ersten Start dein Admin-Konto an.
+
+Mit dem Flag `--nousers` werden im gesamten Frontend die **„Online users"**-Buttons
+(Remote-Log auslesen, nur `http-ping`-Monitore) ausgeblendet. Das Flag wirkt zur
+Build-Zeit und gilt daher auch für den Produktions-Build: `npm run build --nousers`.
+Es blendet nur die Bedienelemente aus; der Server-Endpunkt bleibt erreichbar. Die
+Skripte reichen es weiter: `dev.sh --nousers` sowie `deploy.ps1 -NoUsers` und
+`update.ps1 -NoUsers` (Standard: Buttons sichtbar).
 
 ## Produktions-Deployment (nativ unter Windows, ohne Docker)
 

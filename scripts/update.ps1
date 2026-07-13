@@ -14,6 +14,10 @@
     Führt auch "npm install" aus (verwenden, wenn sich die Abhängigkeiten geändert haben,
     also package.json). Ohne dieses Flag überspringt der Rebuild den Install und ist schneller.
 
+.PARAMETER NoUsers
+    Baut den Client mit ausgeblendeten "Online users"-Buttons. Reicht -NoUsers an
+    deploy.ps1 durch (siehe dort).
+
 .EXAMPLE
     .\update.ps1
     # schneller Rebuild und Dienst-Neustart
@@ -25,7 +29,8 @@
 
 [CmdletBinding()]
 param(
-    [switch] $Full
+    [switch] $Full,
+    [switch] $NoUsers
 )
 
 $ErrorActionPreference = 'Stop'
@@ -46,10 +51,11 @@ if ($svc) {
 }
 
 # Rebuild (überspringt npm install, außer bei -Full).
+# -NoUsers wird unverändert an deploy.ps1 weitergereicht.
 if ($Full) {
-    & $deploy
+    & $deploy -NoUsers:$NoUsers
 } else {
-    & $deploy -SkipInstall
+    & $deploy -SkipInstall -NoUsers:$NoUsers
 }
 if ($LASTEXITCODE -ne 0 -and $null -ne $LASTEXITCODE) {
     throw "deploy.ps1 hat einen Fehler zurückgegeben ($LASTEXITCODE)."

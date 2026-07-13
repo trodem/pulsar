@@ -8,6 +8,7 @@ import { useAuthStore } from "../stores/auth";
 import type { LogFileEntry, Monitor } from "../types";
 import MonitorForm from "../components/MonitorForm.vue";
 import { fileSize, ms, relTime, statusLabel, uptimePct } from "../format";
+import { HIDE_USERS } from "../config";
 
 const store = useMonitorStore();
 const groupStore = useGroupStore();
@@ -636,7 +637,7 @@ async function showLogFiles(m: Monitor) {
         </span>
       </div>
       <button
-        v-if="isAdmin && section.monitors.some((m) => m.type === 'http-ping')"
+        v-if="!HIDE_USERS && isAdmin && section.monitors.some((m) => m.type === 'http-ping')"
         class="btn btn-sm section-check-users"
         title="Read the remote log for every http-ping monitor in this group"
         :disabled="section.monitors.some((m) => m.type === 'http-ping' && checkingUsers.has(m.id))"
@@ -741,7 +742,7 @@ async function showLogFiles(m: Monitor) {
             🌐
           </button>
           <button
-            v-if="isAdmin && m.type === 'http-ping'"
+            v-if="!HIDE_USERS && isAdmin && m.type === 'http-ping'"
             class="btn btn-sm btn-icon"
             :title="checkingUsers.has(m.id) ? 'Checking…' : 'Online users'"
             :aria-label="checkingUsers.has(m.id) ? 'Checking…' : 'Online users'"
@@ -865,7 +866,7 @@ async function showLogFiles(m: Monitor) {
               🖥️
             </button>
             <button
-              v-if="isAdmin && m.type === 'http-ping'"
+              v-if="!HIDE_USERS && isAdmin && m.type === 'http-ping'"
               class="btn btn-sm btn-icon"
               :title="checkingUsers.has(m.id) ? 'Checking…' : 'Online users'"
               :aria-label="checkingUsers.has(m.id) ? 'Checking…' : 'Online users'"

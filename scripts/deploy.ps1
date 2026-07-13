@@ -41,6 +41,10 @@
     erledigen, wenn du NSSM nicht willst (oder nicht hast). Ctrl+C zum Beenden. Wird mit
     -InstallService ignoriert (in dem Fall startet der Dienst von selbst).
 
+.PARAMETER NoUsers
+    Baut den Client mit ausgeblendeten "Online users"-Buttons (Remote-Log auslesen,
+    nur http-ping-Monitore). Reicht das Flag --nousers an "npm run build" durch.
+
 .EXAMPLE
     # Build + sofortiger Start im Vordergrund (ein einziger Befehl, kein Dienst)
     .\deploy.ps1 -Start -OpenFirewall
@@ -63,7 +67,8 @@ param(
     [string] $ServicePassword,
     [switch] $OpenFirewall,
     [switch] $SkipInstall,
-    [switch] $Start
+    [switch] $Start,
+    [switch] $NoUsers
 )
 
 $ErrorActionPreference = 'Stop'
@@ -140,8 +145,11 @@ if (-not $SkipInstall) {
     Write-Ok "npm install (client)…"
     Invoke-Native 'npm.cmd' @('install') $clientDir
 }
-Write-Ok "npm run build (client)…"
-Invoke-Native 'npm.cmd' @('run','build') $clientDir
+# Bei -NoUsers das Flag --nousers an den Build durchreichen (blendet die
+# "Online users"-Buttons aus; siehe client/vite.config.ts).
+$buildArgs = if ($NoUsers) { @('run','build','--nousers') } else { @('run','build') }
+Write-Ok ("npm {0} (client)…" -f ($buildArgs -join ' '))
+Invoke-Native 'npm.cmd' $buildArgs $clientDir
 
 $clientDist = Join-Path $clientDir 'dist'
 if (-not (Test-Path (Join-Path $clientDist 'index.html'))) {

@@ -15,7 +15,7 @@ Two independent packages (no root workspace — install/run each separately):
 - `server/` — Express REST API + Socket.IO, per-monitor scheduler, SQLite via Drizzle ORM. ESM, run with `tsx`.
 - `client/` — Vue 3 SPA (Vite, Pinia, Vue Router). Dev server proxies `/api` and `/socket.io` to the backend.
 
-**Deployment is native (no Docker).** In production the client is compiled (`npm run build` → `client/dist`) and copied into `server/public`; the server then serves the SPA, REST API and Socket.IO all from **one process on one port** (default `3021`) — `src/index.ts` serves `../public` via `express.static` when that dir exists. No nginx, no separate client port, no CORS. On Windows this keeps STAP working (SMB shares), which a Linux container cannot do. See `setup.md` and the `scripts/` folder: `deploy.ps1` (build + optional NSSM Windows service + firewall + `.env` bootstrap), `update.ps1` (stop → rebuild → start), `dev.sh` (dev mode: server `:3021` + Vite client `:5173`).
+**Deployment is native (no Docker).** In production the client is compiled (`npm run build` → `client/dist`) and copied into `server/public`; the server then serves the SPA, REST API and Socket.IO all from **one process on one port** (default `3021`) — `src/index.ts` serves `../public` via `express.static` when that dir exists. No nginx, no separate client port, no CORS. On Windows this keeps STAP working (SMB shares), which a Linux container cannot do. See `setup.md` and the `scripts/` folder: `deploy.ps1` (build + optional NSSM Windows service + firewall + `.env` bootstrap), `update.ps1` (stop → rebuild → start), `dev.sh` (dev mode: server `:3021` + Vite client `:5173`). All three take an opt-in `-NoUsers` / `--nousers` flag that forwards `--nousers` to the client build/dev to hide the "Online users" buttons (see the frontend `--nousers` note below); default builds keep them visible.
 
 ### Backend flow
 - `src/index.ts` — boot: `initSchema()` → mount routes (`/api/auth`, `/api/monitors`, `/api/notifications`) → `initSocket()` → `startScheduler()`.
@@ -46,8 +46,16 @@ npm run seed:users  # create/update accounts (edit src/scripts/seed-users.ts)
 ```bash
 npm install
 npm run dev      # vite, http://localhost:5173
+npm run dev --nousers  # dev, aber ohne die "Online users"-Buttons
 npm run build    # vue-tsc -b && vite build -> client/dist
 ```
+
+The `--nousers` flag hides every "Online users" button (remote-log read, `http-ping`
+only) across the client. npm exposes the flag as `process.env.npm_config_nousers`;
+`vite.config.ts` reads it and injects the `__HIDE_USERS__` compile-time constant,
+surfaced as `HIDE_USERS` from `src/config.ts` and used in each button's `v-if`. It is
+build-time, so it also applies to `npm run build --nousers`. UI-only — the server
+`check-users` endpoint stays reachable.
 
 ### Production deploy (native Windows, from repo root)
 ```powershell
