@@ -84,8 +84,9 @@ Firewall-Regel und einem Dienstkonto mit Zugriff auf die `C$`-Freigaben der
 
 Öffne dann `http://<host-ip>:3021` von einem beliebigen PC im LAN und lege beim
 ersten Start das Admin-Konto an. Nach Codeänderungen mit `.\scripts\update.ps1`
-neu ausrollen (stoppen → neu bauen → starten). Siehe **[setup.md](setup.md)** für
-die vollständige Anleitung.
+neu ausrollen (stoppen → neu bauen → starten). Zum Stoppen und Freigeben des Ports
+`.\scripts\stop.ps1` (mit `-CloseFirewall` auch die Firewall-Regel entfernen). Siehe
+**[setup.md](setup.md)** für die vollständige Anleitung.
 
 ## Hinweise
 

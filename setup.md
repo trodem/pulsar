@@ -122,6 +122,13 @@ New-NetFirewallRule -DisplayName "Pulsar (3021)" -Direction Inbound `
     -Protocol TCP -LocalPort 3021 -Action Allow
 ```
 
+Zum **Schließen** des Ports die Regel wieder entfernen — am einfachsten über
+`.\scripts\stop.ps1 -CloseFirewall` (siehe §7) oder manuell:
+
+```powershell
+Remove-NetFirewallRule -DisplayName "Pulsar (3021)"
+```
+
 ---
 
 ## 5. Zugriff von den anderen PCs
@@ -163,7 +170,38 @@ mit den richtigen Rechten für STAP.
 
 ---
 
-## 7. Pulsar aktualisieren
+## 7. Pulsar stoppen und Port schließen
+
+Gegenstück zu `deploy.ps1`: **`scripts\stop.ps1`** stoppt Pulsar und gibt den Port
+wieder frei — egal ob als Windows-Dienst oder im Vordergrund (`deploy.ps1 -Start`)
+gestartet.
+
+```powershell
+.\scripts\stop.ps1                 # Pulsar stoppen, Port freigeben (Firewallregel bleibt)
+.\scripts\stop.ps1 -CloseFirewall  # zusätzlich die Firewallregel entfernen (Port nach außen schließen)
+```
+
+Was das Skript macht:
+
+1. Ist der Windows-Dienst `Pulsar` installiert, wird er sauber gestoppt.
+2. Andernfalls (oder falls ein Prozess übrig blieb) wird der Node-Prozess beendet,
+   der auf dem Port lauscht; danach prüft das Skript, ob der Port frei ist.
+3. *(mit `-CloseFirewall`)* entfernt die eingehende Regel `Pulsar (<Port>)`. Fehlen
+   die Administratorrechte, erledigt das eine elevierte Instanz (UAC-Abfrage
+   bestätigen) — dieselbe Logik wie `deploy.ps1 -OpenFirewall`.
+
+| Parameter | Wirkung |
+|---|---|
+| `-Port 3021` | Port, den Pulsar belegt (Standard 3021; muss mit `PORT` in `.env` übereinstimmen). |
+| `-CloseFirewall` | Entfernt die Firewallregel `Pulsar (<Port>)` (schließt den Port nach außen). |
+
+> 💡 Für den Windows-Dienst reicht auch `Stop-Service Pulsar` (siehe oben);
+> `stop.ps1` ist vor allem beim Vordergrundstart nützlich und kann in einem Rutsch
+> zusätzlich die Firewallregel entfernen.
+
+---
+
+## 8. Pulsar aktualisieren
 
 Nach einem `git pull` oder Codeänderungen verwende **`update.ps1`** (PowerShell
 als Admin):
@@ -178,7 +216,7 @@ Rebuild: danach `cd server ; npm start` erneut ausführen.
 
 ---
 
-## 8. Backup
+## 9. Backup
 
 Alle Daten liegen in einer einzigen SQLite-Datei:
 
@@ -191,7 +229,7 @@ Wiederherstellung: die Datei zurückspielen und neu starten.
 
 ---
 
-## 9. Entwicklung (zur Referenz)
+## 10. Entwicklung (zur Referenz)
 
 Zum Arbeiten am Code, nicht für die Produktion, gibt es `scripts/dev.sh` (Git
 Bash): startet Server (`:3021`) und Client (`:5173`) im Dev-Modus mit
