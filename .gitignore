@@ -7,6 +7,10 @@ dist/
 **/dist/
 *.tsbuildinfo
 
+# Kompilierter Client-Build, den deploy.ps1 nach server/public kopiert
+# (wird bei jedem Build neu erzeugt, gehoert nicht ins Repo)
+server/public/
+
 # Environment variables (keep .env.example)
 .env
 .env.local
