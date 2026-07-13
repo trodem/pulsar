@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     Stoppt Pulsar und gibt den Port frei (Gegenstück zu deploy.ps1).
 
