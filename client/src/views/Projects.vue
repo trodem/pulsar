@@ -128,10 +128,43 @@ const selectedMonitorIds = ref<number[]>([]);
 
 const monitors = computed(() => monitorStore.monitors);
 
+// Aktuelle Zuordnung jedes Monitors zu einem Fahrzeug (über alle Projekte),
+// um im Zuweisungs-Dialog bereits vergebene Monitore zu sperren.
+const monitorAssignment = computed(() => {
+  const map = new Map<number, { vehicleId: number; vehicleName: string }>();
+  for (const p of store.items) {
+    for (const v of p.vehicles) {
+      for (const m of v.monitors) {
+        map.set(m.id, { vehicleId: v.id, vehicleName: v.name });
+      }
+    }
+  }
+  return map;
+});
+
+// True, wenn der Monitor bereits einem ANDEREN Fahrzeug zugewiesen ist (nicht dem
+// gerade im Dialog offenen) — dann im Dialog nicht auswählbar.
+function assignedElsewhere(id: number): boolean {
+  const a = monitorAssignment.value.get(id);
+  return !!a && a.vehicleId !== assignVehicle.value?.id;
+}
+
 // Status-LED-Klasse eines Monitors (aus dem Monitor-Store nachgeschlagen).
 function monitorStatusCls(id: number): string {
   const m = monitorStore.monitors.find((x) => x.id === id);
   return statusLabel(m?.stats?.status).cls;
+}
+
+// Nur http/http-ping-Monitore haben eine aufrufbare URL (target).
+function hasUrl(id: number): boolean {
+  const m = monitorStore.monitors.find((x) => x.id === id);
+  return !!m && (m.type === "http" || m.type === "http-ping");
+}
+
+// Öffnet die überwachte Website (target) des Monitors in einem neuen Tab.
+function openMonitorUrl(id: number) {
+  const m = monitorStore.monitors.find((x) => x.id === id);
+  if (m) window.open(m.target, "_blank", "noopener");
 }
 
 function openAssign(v: Vehicle) {
@@ -164,9 +197,6 @@ async function saveAssign() {
 // --- Drag & Drop: Monitore zwischen Fahrzeugen verschieben (auch projektübergreifend) ---
 const dragMonitorId = ref<number | null>(null);
 const dragOverVehicleId = ref<number | null>(null);
-// Merkt sich, dass gerade gezogen wurde, um den Klick (Navigation) nach einem
-// Drag zu unterdrücken.
-const justDragged = ref(false);
 
 function onMonitorDragStart(m: VehicleMonitor, e: DragEvent) {
   if (!isAdmin.value) return;
@@ -178,9 +208,6 @@ function onMonitorDragStart(m: VehicleMonitor, e: DragEvent) {
 function onMonitorDragEnd() {
   dragMonitorId.value = null;
   dragOverVehicleId.value = null;
-  // Klick-Unterdrückung kurz aktiv lassen (der Klick folgt direkt auf dragend).
-  justDragged.value = true;
-  setTimeout(() => (justDragged.value = false), 0);
 }
 
 function onVehicleDragOver(v: Vehicle, e: DragEvent) {
@@ -205,8 +232,13 @@ async function onMonitorDrop(v: Vehicle) {
 }
 
 function goToMonitor(id: number) {
-  if (justDragged.value) return;
   router.push({ name: "monitor", params: { id } });
+}
+
+// Nimmt einen Monitor aus seinem Fahrzeug (löscht ihn nicht, setzt nur
+// vehicle_id = null, sodass er wieder frei zuweisbar ist).
+async function removeFromVehicle(m: VehicleMonitor) {
+  await store.moveMonitorToVehicle(m.id, null);
 }
 </script>
 
@@ -235,32 +267,18 @@ function goToMonitor(id: number) {
           </span>
         </div>
         <div v-if="isAdmin" class="project-actions">
-          <button
-            class="btn btn-sm btn-icon"
-            title="Fahrzeug hinzufügen"
-            aria-label="Fahrzeug hinzufügen"
-            @click="openNewVehicle(p)"
-          >
-            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+          <button class="btn btn-sm" @click="openNewVehicle(p)">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
               <line x1="12" y1="5" x2="12" y2="19" />
               <line x1="5" y1="12" x2="19" y2="12" />
             </svg>
+            Fahrzeug
           </button>
-          <button
-            class="btn btn-sm btn-icon"
-            title="Projekt bearbeiten"
-            aria-label="Projekt bearbeiten"
-            @click="openEditProject(p)"
-          >
-            ✏️
+          <button class="btn btn-sm" @click="openEditProject(p)">
+            ✏️ Bearbeiten
           </button>
-          <button
-            class="btn btn-sm btn-icon btn-icon-danger"
-            title="Projekt löschen"
-            aria-label="Projekt löschen"
-            @click="removeProject(p)"
-          >
-            ✕
+          <button class="btn btn-sm btn-danger" @click="removeProject(p)">
+            ✕ Löschen
           </button>
         </div>
       </div>
@@ -318,18 +336,57 @@ function goToMonitor(id: number) {
                 :key="m.id"
                 class="mon-card"
                 :class="{ 'mon-dragging': dragMonitorId === m.id }"
-                :draggable="isAdmin"
-                @dragstart="onMonitorDragStart(m, $event)"
-                @dragend="onMonitorDragEnd"
-                @click="goToMonitor(m.id)"
               >
+                <span
+                  v-if="isAdmin"
+                  class="drag-handle"
+                  draggable="true"
+                  title="Ziehen, um den Monitor einem anderen Fahrzeug zuzuweisen"
+                  aria-label="Zu anderem Fahrzeug ziehen"
+                  @dragstart="onMonitorDragStart(m, $event)"
+                  @dragend="onMonitorDragEnd"
+                  >⠿</span
+                >
                 <span class="led" :class="monitorStatusCls(m.id)"></span>
                 <span class="mon-card-name">{{ m.name }}</span>
+                <button
+                  class="mon-detail"
+                  title="Monitor-Details öffnen"
+                  aria-label="Monitor-Details öffnen"
+                  draggable="false"
+                  @click.stop="goToMonitor(m.id)"
+                  @mousedown.stop
+                >
+                  <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z" />
+                    <circle cx="12" cy="12" r="3" />
+                  </svg>
+                </button>
+                <button
+                  v-if="hasUrl(m.id)"
+                  class="mon-open"
+                  title="Website öffnen"
+                  aria-label="Website öffnen"
+                  draggable="false"
+                  @click.stop="openMonitorUrl(m.id)"
+                  @mousedown.stop
+                >
+                  🌐
+                </button>
+                <button
+                  v-if="isAdmin"
+                  class="mon-remove"
+                  title="Aus Fahrzeug entfernen"
+                  aria-label="Aus Fahrzeug entfernen"
+                  draggable="false"
+                  @click.stop="removeFromVehicle(m)"
+                  @mousedown.stop
+                >
+                  ✕
+                </button>
               </div>
             </template>
-            <span v-else class="chip-empty">
-              Keine Monitore — Monitor hierher ziehen
-            </span>
+            <span v-else class="chip-empty">Keine Monitore zugewiesen</span>
           </div>
         </div>
       </div>
@@ -366,7 +423,7 @@ function goToMonitor(id: number) {
 
       <div class="field">
         <label>Name</label>
-        <input v-model="vehicleName" placeholder="z. B. LKW-01" />
+        <input v-model="vehicleName" placeholder="z. B. Zug" />
       </div>
 
       <div class="modal-actions">
@@ -386,14 +443,23 @@ function goToMonitor(id: number) {
         <label>Zugewiesene Monitore</label>
         <div v-if="monitors.length === 0" class="muted">Keine Monitore vorhanden.</div>
         <div v-else class="pick-list">
-          <label v-for="mon in monitors" :key="mon.id" class="pick-row">
+          <label
+            v-for="mon in monitors"
+            :key="mon.id"
+            class="pick-row"
+            :class="{ 'pick-row-disabled': assignedElsewhere(mon.id) }"
+          >
             <input
               type="checkbox"
               :checked="selectedMonitorIds.includes(mon.id)"
+              :disabled="assignedElsewhere(mon.id)"
               @change="toggleMonitor(mon.id)"
             />
             <span class="led" :class="monitorStatusCls(mon.id)"></span>
-            <span>{{ mon.name }}</span>
+            <span class="pick-name">{{ mon.name }}</span>
+            <span v-if="assignedElsewhere(mon.id)" class="pick-note">
+              bereits an „{{ monitorAssignment.get(mon.id)?.vehicleName }}“
+            </span>
           </label>
         </div>
       </div>
@@ -428,6 +494,9 @@ function goToMonitor(id: number) {
   justify-content: space-between;
   gap: 14px;
   flex-wrap: wrap;
+  /* Trennlinie zwischen Kopf und Inhalt der Projekt-Karte. */
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border);
 }
 .project-title-wrap {
   display: flex;
@@ -457,6 +526,24 @@ function goToMonitor(id: number) {
   flex-shrink: 0;
   flex-wrap: wrap;
 }
+/* Projekt-Karte: Buttons mit Icon + Beschriftung, kompakt. */
+.project-actions .btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 9px;
+  font-size: var(--fs-sm);
+}
+/* Aktions-Icons der Fahrzeug-Karte: etwas kleiner, mit Scale beim Hover. */
+.vehicle-actions .btn-icon {
+  width: 26px;
+  height: 26px;
+  font-size: var(--fs-md);
+  transition: transform 0.12s, background 0.15s, border-color 0.15s;
+}
+.vehicle-actions .btn-icon:hover {
+  transform: scale(1.18);
+}
 .project-desc {
   margin: 0;
   color: var(--text-dim);
@@ -469,10 +556,10 @@ function goToMonitor(id: number) {
 }
 
 .vehicle-list {
-  /* Fahrzeug-Karten als Zeilen: horizontal umbrechendes Raster, jede Karte
-     mindestens 300px breit (auto-fill füllt die Zeile mit gleich breiten Karten). */
+  /* Fahrzeug-Karten als Zeilen: mindestens 300px breit, wachsen aber mit und
+     füllen den verfügbaren Platz (auto-fit dehnt vorhandene Karten aus). */
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
   gap: 8px;
 }
 .vehicle {
@@ -496,15 +583,18 @@ function goToMonitor(id: number) {
   justify-content: space-between;
   gap: 12px;
   flex-wrap: wrap;
+  /* Trennlinie zwischen Kopf und Inhalt der Fahrzeug-Karte. */
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
 }
 .vehicle-name {
   font-weight: 600;
   font-size: 14px;
 }
 .vehicle-monitors {
-  /* Monitor-Karten: höchstens 2 pro Zeile. */
+  /* Monitor-Pillen untereinander (eine Spalte), jede über die volle Breite. */
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 1fr);
   gap: 6px;
 }
 .mon-card {
@@ -514,18 +604,20 @@ function goToMonitor(id: number) {
   min-width: 0;
   font-size: 12px;
   color: var(--text);
-  background: var(--bg-elev);
-  border: 1px solid var(--border);
-  padding: 7px 9px;
-  border-radius: 6px;
-  cursor: grab;
-  transition: border-color 0.15s, box-shadow 0.15s;
+  /* Transparente Pill mit dünnem, dezentem Rahmen in der App-Farbe. */
+  background: transparent;
+  border: 1px solid color-mix(in srgb, var(--accent) 40%, transparent);
+  padding: 4px 6px 4px 8px;
+  border-radius: 999px;
+  transition: border-color 0.15s, background 0.15s;
 }
-.mon-card:hover {
-  border-color: var(--accent);
+/* Griff skaliert beim Hover wie die übrigen Icons. */
+.mon-card .drag-handle {
+  transition: transform 0.12s, color 0.15s;
 }
-.mon-card:active {
-  cursor: grabbing;
+.mon-card .drag-handle:hover {
+  transform: scale(1.25);
+  color: var(--accent);
 }
 /* Die gerade gezogene Karte abschwächen. */
 .mon-dragging {
@@ -536,9 +628,45 @@ function goToMonitor(id: number) {
   height: 9px;
 }
 .mon-card-name {
+  flex: 1;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+/* Kleine, runde Aktions-Buttons in der Pill (Details / Website öffnen / Entfernen). */
+.mon-detail,
+.mon-open,
+.mon-remove {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text-dim);
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+  transition: color 0.15s, background 0.15s, transform 0.12s;
+}
+.mon-detail:hover,
+.mon-open:hover,
+.mon-remove:hover {
+  transform: scale(1.25);
+}
+.mon-detail:hover,
+.mon-open:hover {
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+}
+.mon-remove:hover {
+  color: var(--down);
+  background: color-mix(in srgb, var(--down) 15%, transparent);
 }
 /* Leerer-Zustand-Text spannt über beide Spalten. */
 .chip-empty {
@@ -575,5 +703,26 @@ function goToMonitor(id: number) {
 .pick-row .led {
   width: 10px;
   height: 10px;
+}
+.pick-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* Bereits an ein anderes Fahrzeug vergebener Monitor: nicht auswählbar. */
+.pick-row-disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.pick-row-disabled input {
+  cursor: not-allowed;
+}
+.pick-note {
+  flex-shrink: 0;
+  font-size: 11px;
+  font-style: italic;
+  color: var(--text-dim);
 }
 </style>
