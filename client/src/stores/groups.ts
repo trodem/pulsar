@@ -26,5 +26,24 @@ export const useGroupStore = defineStore("groups", () => {
     items.value = items.value.filter((g) => g.id !== id);
   }
 
-  return { items, fetchAll, create, update, remove };
+  // Persistiert eine neue Reihenfolge (per Drag & Drop). Es gibt keinen Bulk-
+  // Endpunkt, daher schreiben wir für jede Gruppe die neue position (= Index).
+  // Optimistisch: lokale Liste sofort aktualisieren, bei Fehler neu laden.
+  async function reorder(ordered: Group[]) {
+    ordered.forEach((g, i) => {
+      g.position = i;
+    });
+    items.value = [...ordered];
+    try {
+      await Promise.all(
+        ordered.map((g, i) =>
+          api.put(`/groups/${g.id}`, { name: g.name, position: i }),
+        ),
+      );
+    } catch {
+      await fetchAll();
+    }
+  }
+
+  return { items, fetchAll, create, update, remove, reorder };
 });

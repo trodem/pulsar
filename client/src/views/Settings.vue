@@ -13,7 +13,7 @@ onMounted(() => {
 });
 
 // --- Groups ---------------------------------------------------------------
-const newGroup = reactive({ name: "", position: 0 });
+const newGroup = reactive({ name: "" });
 const groupError = ref("");
 
 async function addGroup() {
@@ -23,12 +23,13 @@ async function addGroup() {
     return;
   }
   try {
+    // Neue Gruppen erhalten die Standard-Sortierung (0); die Reihenfolge lässt
+    // sich weiterhin in der Tabelle darunter anpassen.
     await groupStore.create({
       name: newGroup.name.trim(),
-      position: Number(newGroup.position) || 0,
+      position: 0,
     });
     newGroup.name = "";
-    newGroup.position = 0;
   } catch (e: any) {
     groupError.value = e.response?.data?.error ?? "Could not create group.";
   }
@@ -49,6 +50,53 @@ async function removeGroup(g: Group) {
   ) {
     await groupStore.remove(g.id);
   }
+}
+
+// --- Gruppen per Drag & Drop sortieren ------------------------------------
+// dragId = gezogene Gruppe, dragOverId = aktuell überfahrene Zeile, dropAfter =
+// ob unterhalb der Zeilenmitte losgelassen wird (Einfügemarke oben/unten).
+const dragId = ref<number | null>(null);
+const dragOverId = ref<number | null>(null);
+const dropAfter = ref(false);
+
+function onGroupDragStart(g: Group, e: DragEvent) {
+  dragId.value = g.id;
+  // Firefox startet den Drag nur, wenn Transfer-Daten gesetzt sind.
+  e.dataTransfer?.setData("text/plain", String(g.id));
+  if (e.dataTransfer) e.dataTransfer.effectAllowed = "move";
+}
+
+function onGroupDragOver(g: Group, e: DragEvent) {
+  if (dragId.value == null || dragId.value === g.id) return;
+  e.preventDefault();
+  if (e.dataTransfer) e.dataTransfer.dropEffect = "move";
+  const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+  dropAfter.value = e.clientY > rect.top + rect.height / 2;
+  dragOverId.value = g.id;
+}
+
+function onGroupDragLeave(g: Group) {
+  if (dragOverId.value === g.id) dragOverId.value = null;
+}
+
+function onGroupDragEnd() {
+  dragId.value = null;
+  dragOverId.value = null;
+}
+
+async function onGroupDrop(target: Group) {
+  const id = dragId.value;
+  const after = dropAfter.value;
+  dragOverId.value = null;
+  dragId.value = null;
+  if (id == null || id === target.id) return;
+  const dragged = groupStore.items.find((g) => g.id === id);
+  if (!dragged) return;
+  const arr = groupStore.items.filter((g) => g.id !== id);
+  const targetIdx = arr.findIndex((g) => g.id === target.id);
+  if (targetIdx < 0) return;
+  arr.splice(after ? targetIdx + 1 : targetIdx, 0, dragged);
+  await groupStore.reorder(arr);
 }
 
 // --- Tags -----------------------------------------------------------------
@@ -88,6 +136,7 @@ async function removeTag(t: Tag) {
     <h1>Groups &amp; Tags</h1>
   </div>
 
+  <div class="settings-grid">
   <section class="settings-block">
     <h2>Groups</h2>
     <p class="muted">
@@ -99,13 +148,6 @@ async function removeTag(t: Tag) {
 
     <div class="settings-add">
       <input v-model="newGroup.name" placeholder="Group name" @keyup.enter="addGroup" />
-      <input
-        v-model.number="newGroup.position"
-        type="number"
-        class="pos-input"
-        title="Sort order (lower shows first)"
-        placeholder="0"
-      />
       <button class="btn btn-primary" @click="addGroup">+ Add group</button>
     </div>
 
@@ -113,23 +155,35 @@ async function removeTag(t: Tag) {
     <table v-else class="settings-table">
       <thead>
         <tr>
+          <th class="drag-col"></th>
           <th>Name</th>
-          <th class="pos-col">Order</th>
           <th></th>
         </tr>
       </thead>
       <tbody>
-        <tr v-for="g in groupStore.items" :key="g.id">
-          <td><input v-model="g.name" @blur="saveGroup(g)" @keyup.enter="saveGroup(g)" /></td>
-          <td>
-            <input
-              v-model.number="g.position"
-              type="number"
-              class="pos-input"
-              @blur="saveGroup(g)"
-              @keyup.enter="saveGroup(g)"
-            />
+        <tr
+          v-for="g in groupStore.items"
+          :key="g.id"
+          :class="{
+            dragging: dragId === g.id,
+            'drag-over-before': dragOverId === g.id && !dropAfter,
+            'drag-over-after': dragOverId === g.id && dropAfter,
+          }"
+          @dragover="onGroupDragOver(g, $event)"
+          @dragleave="onGroupDragLeave(g)"
+          @drop.prevent="onGroupDrop(g)"
+        >
+          <td class="drag-cell">
+            <span
+              class="drag-handle"
+              draggable="true"
+              title="Zum Sortieren ziehen"
+              @dragstart="onGroupDragStart(g, $event)"
+              @dragend="onGroupDragEnd"
+              >⠿</span
+            >
           </td>
+          <td><input v-model="g.name" @blur="saveGroup(g)" @keyup.enter="saveGroup(g)" /></td>
           <td class="row-actions">
             <button class="btn btn-sm btn-danger" @click="removeGroup(g)">Delete</button>
           </td>
@@ -157,14 +211,18 @@ async function removeTag(t: Tag) {
     <table v-else class="settings-table">
       <thead>
         <tr>
-          <th>Preview</th>
           <th>Name</th>
           <th class="pos-col">Color</th>
+          <th>Preview</th>
           <th></th>
         </tr>
       </thead>
       <tbody>
         <tr v-for="t in tagStore.items" :key="t.id">
+          <td><input v-model="t.name" @blur="saveTag(t)" @keyup.enter="saveTag(t)" /></td>
+          <td>
+            <input v-model="t.color" type="color" class="color-input" @change="saveTag(t)" />
+          </td>
           <td>
             <span
               class="tag-chip readonly"
@@ -173,10 +231,6 @@ async function removeTag(t: Tag) {
               {{ t.name || "tag" }}
             </span>
           </td>
-          <td><input v-model="t.name" @blur="saveTag(t)" @keyup.enter="saveTag(t)" /></td>
-          <td>
-            <input v-model="t.color" type="color" class="color-input" @change="saveTag(t)" />
-          </td>
           <td class="row-actions">
             <button class="btn btn-sm btn-danger" @click="removeTag(t)">Delete</button>
           </td>
@@ -184,4 +238,5 @@ async function removeTag(t: Tag) {
       </tbody>
     </table>
   </section>
+  </div>
 </template>
