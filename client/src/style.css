@@ -1190,6 +1190,11 @@ select {
   padding: 24px;
 }
 
+/* Breitere Variante des Modals (z. B. das Wartungsformular mit mehr Feldern). */
+.modal-wide {
+  max-width: 780px;
+}
+
 .modal h2 {
   margin-top: 0;
 }

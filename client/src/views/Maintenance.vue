@@ -304,7 +304,7 @@ const groups = computed(() => groupStore.items);
   </div>
 
   <div v-if="showForm" class="modal-backdrop" @click.self="showForm = false">
-    <div class="modal">
+    <div class="modal modal-wide">
       <h2>{{ editingId ? "Edit maintenance" : "New maintenance" }}</h2>
       <div v-if="error" class="error-msg">{{ error }}</div>
 
