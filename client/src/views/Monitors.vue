@@ -688,10 +688,8 @@ async function showLogFiles(m: Monitor) {
           v-if="!m.active || m.stats?.status === 3 || (m.tags?.length ?? 0)"
           class="row-meta"
         >
-          <span v-if="!m.active" class="paused-badge">paused</span>
-          <span v-else-if="m.stats?.status === 3" class="maintenance-badge">
-            maintenance
-          </span>
+          <!-- Reihenfolge (links -> rechts): Tags, dann Service-Badge
+               (maintenance/paused); die Aktions-Buttons folgen in .row-actions. -->
           <span
             v-for="t in m.tags ?? []"
             :key="t.id"
@@ -699,6 +697,10 @@ async function showLogFiles(m: Monitor) {
             :style="{ background: t.color, borderColor: t.color }"
           >
             {{ t.name }}
+          </span>
+          <span v-if="!m.active" class="paused-badge">paused</span>
+          <span v-else-if="m.stats?.status === 3" class="maintenance-badge">
+            maintenance
           </span>
         </div>
         <div class="row-actions monitor-actions">
