@@ -113,10 +113,15 @@ function computeStats(monitors: Monitor[]) {
 }
 
 // Monitors split into sections: one per group (in the group store's order),
-// then an "Ungrouped" section. Empty sections are dropped. Each section carries
-// its own aggregate stats, shown inline on the group header.
+// then an "Ungrouped" section. Groups without monitors are shown too (e.g. as a
+// drop target), but only when no filter is active — during filtering we keep the
+// view to matching monitors. Each section carries its own aggregate stats.
 const sections = computed(() => {
   const list = filteredMonitors.value;
+  const noFilter =
+    ui.monitorSearch.trim() === "" &&
+    ui.activeTagIds.size === 0 &&
+    ui.activeStatus == null;
   const out: {
     id: number | null;
     name: string;
@@ -125,7 +130,7 @@ const sections = computed(() => {
   }[] = [];
   for (const g of groupStore.items) {
     const monitors = list.filter((m) => m.groupId === g.id);
-    if (monitors.length)
+    if (monitors.length || noFilter)
       out.push({ id: g.id, name: g.name, monitors, stats: computeStats(monitors) });
   }
   const ungrouped = list.filter((m) => m.groupId == null);
