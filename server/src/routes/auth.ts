@@ -3,6 +3,7 @@ import { z } from "zod";
 import {
   countUsers,
   createUser,
+  normalizeRole,
   signToken,
   verifyCredentials,
 } from "../auth/service.js";
@@ -56,7 +57,9 @@ router.post("/login", async (req, res) => {
     res.status(401).json({ error: "Wrong username or password" });
     return;
   }
-  const role = user.role === "admin" ? "admin" : "user";
+  // Rolle aus der DB (Spalte ist TEXT) sicher zu Role verengen, damit ein
+  // "editor" nicht auf "user" zurückfällt.
+  const role = normalizeRole(user.role);
   const token = signToken({ uid: user.id, username: user.username, role });
   res.json({ token, username: user.username, role });
 });

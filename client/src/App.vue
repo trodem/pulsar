@@ -9,6 +9,14 @@ const auth = useAuthStore();
 
 const showShell = computed(() => route.name !== "login");
 
+// Badge-Text/-Stil je Rolle: admin (Vollzugriff), editor (nur Projekte),
+// sonst read-only.
+const roleBadge = computed(() => {
+  if (auth.role === "admin") return { label: "admin", cls: "role-admin" };
+  if (auth.role === "editor") return { label: "editor", cls: "role-editor" };
+  return { label: "read-only", cls: "role-user" };
+});
+
 const collapsed = ref(localStorage.getItem("sidebarCollapsed") === "1");
 watch(collapsed, (v) => localStorage.setItem("sidebarCollapsed", v ? "1" : "0"));
 function toggleSidebar() {
@@ -31,8 +39,8 @@ function logout() {
       <div class="header-right">
         <span class="muted">
           Signed in as <strong>{{ auth.username }}</strong>
-          <span class="role-badge" :class="auth.isAdmin ? 'role-admin' : 'role-user'">
-            {{ auth.isAdmin ? "admin" : "read-only" }}
+          <span class="role-badge" :class="roleBadge.cls">
+            {{ roleBadge.label }}
           </span>
         </span>
         <button class="btn btn-sm" @click="logout">Log out</button>
@@ -156,6 +164,10 @@ function logout() {
 .role-admin {
   background: rgba(79, 157, 255, 0.16);
   color: #4f9dff;
+}
+.role-editor {
+  background: rgba(52, 199, 123, 0.16);
+  color: #34c77b;
 }
 .role-user {
   background: rgba(148, 163, 184, 0.18);

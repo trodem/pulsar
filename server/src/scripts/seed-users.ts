@@ -15,11 +15,25 @@ interface SeedUser {
   role: Role;
 }
 
-// The desired accounts. Edit here (or extend to read argv/env) to change them.
-const SEED: SeedUser[] = [
-  { username: "stibs", password: "TL85v3pwr", role: "admin" },
-  { username: "user", password: "stibs1234", role: "user" },
+// Die Konten kommen aus dem .env (nicht mehr hartkodiert, damit keine echten
+// Passwörter im Repo landen). Pro Rolle ein Paar USER/PASSWORD; ein Konto wird
+// nur angelegt/aktualisiert, wenn beide Werte gesetzt sind — so lässt sich eine
+// Rolle durch Weglassen der Variablen einfach überspringen.
+const ROLE_ENV: { role: Role; userKey: string; passKey: string }[] = [
+  { role: "admin", userKey: "PULSAR_ADMIN_USER", passKey: "PULSAR_ADMIN_PASSWORD" },
+  { role: "editor", userKey: "PULSAR_EDITOR_USER", passKey: "PULSAR_EDITOR_PASSWORD" },
+  { role: "user", userKey: "PULSAR_USER_USER", passKey: "PULSAR_USER_PASSWORD" },
 ];
+
+const SEED: SeedUser[] = ROLE_ENV.flatMap(({ role, userKey, passKey }) => {
+  const username = process.env[userKey]?.trim();
+  const password = process.env[passKey];
+  if (!username || !password) {
+    console.log(`[seed] skip ${role}: ${userKey}/${passKey} nicht gesetzt`);
+    return [];
+  }
+  return [{ username, password, role }];
+});
 
 async function upsert({ username, password, role }: SeedUser) {
   const passwordHash = await bcrypt.hash(password, 10);

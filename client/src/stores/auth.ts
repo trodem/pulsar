@@ -3,18 +3,26 @@ import { computed, ref } from "vue";
 import { api } from "../api";
 import { connectSocket, disconnectSocket } from "../socket";
 
-export type Role = "admin" | "user";
+export type Role = "admin" | "editor" | "user";
+
+// Gespeicherten Rollen-String sicher zu Role verengen (Default: read-only).
+function parseRole(value: string | null): Role {
+  return value === "admin" || value === "editor" ? value : "user";
+}
 
 export const useAuthStore = defineStore("auth", () => {
   const token = ref<string | null>(localStorage.getItem("token"));
   const username = ref<string | null>(localStorage.getItem("username"));
-  const role = ref<Role>(
-    localStorage.getItem("role") === "admin" ? "admin" : "user",
-  );
+  const role = ref<Role>(parseRole(localStorage.getItem("role")));
 
   // Admins have full access; "user" accounts are read-only. Used across the UI
   // to hide mutating controls (the server also enforces this — see requireWrite).
   const isAdmin = computed(() => role.value === "admin");
+  // "editor" darf zusätzlich die Projekte-/Fahrzeug-Verwaltung bearbeiten
+  // (admin natürlich auch). Serverseitig via requireWrite("admin","editor").
+  const canManageProjects = computed(
+    () => role.value === "admin" || role.value === "editor",
+  );
 
   function setSession(t: string, u: string, r: Role) {
     token.value = t;
@@ -58,7 +66,17 @@ export const useAuthStore = defineStore("auth", () => {
   // Re-establish the socket on a page reload if already logged in.
   if (token.value) connectSocket(token.value);
 
-  return { token, username, role, isAdmin, checkSetup, setup, login, logout };
+  return {
+    token,
+    username,
+    role,
+    isAdmin,
+    canManageProjects,
+    checkSetup,
+    setup,
+    login,
+    logout,
+  };
 });
 
 // Let Vite hot-swap this store's actions during dev; without it, edits to

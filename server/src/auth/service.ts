@@ -5,7 +5,15 @@ import { db } from "../db/index.js";
 import { users } from "../db/schema.js";
 import { config } from "../config.js";
 
-export type Role = "admin" | "user";
+export type Role = "admin" | "editor" | "user";
+
+// Erlaubte Rollen zentral, um DB-Strings (Spalte ist TEXT) sicher zu Role zu
+// verengen. Alles Unbekannte fällt auf "user" (read-only) zurück.
+const ROLES: readonly Role[] = ["admin", "editor", "user"];
+
+export function normalizeRole(value: string | null | undefined): Role {
+  return ROLES.includes(value as Role) ? (value as Role) : "user";
+}
 
 export interface JwtPayload {
   uid: number;

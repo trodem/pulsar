@@ -25,12 +25,19 @@ app.use(express.json());
 
 app.get("/api/health", (_req, res) => res.json({ ok: true }));
 app.use("/api/auth", authRoutes);
-app.use("/api/monitors", requireAuth, requireWrite, monitorRoutes);
-app.use("/api/notifications", requireAuth, requireWrite, notificationRoutes);
-app.use("/api/groups", requireAuth, requireWrite, groupRoutes);
-app.use("/api/projects", requireAuth, requireWrite, projectRoutes);
-app.use("/api/tags", requireAuth, requireWrite, tagRoutes);
-app.use("/api/maintenances", requireAuth, requireWrite, maintenanceRoutes);
+app.use("/api/monitors", requireAuth, requireWrite(), monitorRoutes);
+app.use("/api/notifications", requireAuth, requireWrite(), notificationRoutes);
+app.use("/api/groups", requireAuth, requireWrite(), groupRoutes);
+// Projekte darf zusätzlich die Rolle "editor" schreiben (Projekt-/Fahrzeug-
+// Verwaltung + Monitor-Zuweisung); alles andere bleibt admin-only.
+app.use(
+  "/api/projects",
+  requireAuth,
+  requireWrite("admin", "editor"),
+  projectRoutes,
+);
+app.use("/api/tags", requireAuth, requireWrite(), tagRoutes);
+app.use("/api/maintenances", requireAuth, requireWrite(), maintenanceRoutes);
 
 // In production, serve the built Vue client (copied to ../public by
 // scripts/deploy.ps1) and fall back to index.html for client-side routing.

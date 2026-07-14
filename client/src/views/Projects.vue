@@ -13,8 +13,9 @@ const store = useProjectStore();
 const monitorStore = useMonitorStore();
 const auth = useAuthStore();
 const router = useRouter();
-// Nur Admins dürfen anlegen/ändern/löschen (der Server erzwingt dies ebenfalls).
-const isAdmin = computed(() => auth.isAdmin);
+// Admin und Editor dürfen anlegen/ändern/löschen (der Server erzwingt dies
+// ebenfalls via requireWrite("admin","editor")). "user" sieht alles nur lesend.
+const canEdit = computed(() => auth.canManageProjects);
 
 onMounted(() => {
   store.fetchAll();
@@ -199,7 +200,7 @@ const dragMonitorId = ref<number | null>(null);
 const dragOverVehicleId = ref<number | null>(null);
 
 function onMonitorDragStart(m: VehicleMonitor, e: DragEvent) {
-  if (!isAdmin.value) return;
+  if (!canEdit.value) return;
   dragMonitorId.value = m.id;
   e.dataTransfer?.setData("text/plain", String(m.id));
   if (e.dataTransfer) e.dataTransfer.effectAllowed = "move";
@@ -246,7 +247,7 @@ async function removeFromVehicle(m: VehicleMonitor) {
   <div class="page-head">
     <h1>Projects</h1>
     <div class="page-actions">
-      <button v-if="isAdmin" class="btn btn-primary" @click="openNewProject">
+      <button v-if="canEdit" class="btn btn-primary" @click="openNewProject">
         + Neues Projekt
       </button>
     </div>
@@ -266,7 +267,7 @@ async function removeFromVehicle(m: VehicleMonitor) {
             {{ p.vehicles.length === 1 ? "Fahrzeug" : "Fahrzeuge" }}
           </span>
         </div>
-        <div v-if="isAdmin" class="project-actions">
+        <div v-if="canEdit" class="project-actions">
           <button class="btn btn-sm" @click="openNewVehicle(p)">
             <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
               <line x1="12" y1="5" x2="12" y2="19" />
@@ -301,7 +302,7 @@ async function removeFromVehicle(m: VehicleMonitor) {
         >
           <div class="vehicle-head">
             <span class="vehicle-name">🚆 {{ v.name }}</span>
-            <div v-if="isAdmin" class="vehicle-actions">
+            <div v-if="canEdit" class="vehicle-actions">
               <button
                 class="btn btn-sm btn-icon"
                 title="Monitore zuweisen"
@@ -338,7 +339,7 @@ async function removeFromVehicle(m: VehicleMonitor) {
                 :class="{ 'mon-dragging': dragMonitorId === m.id }"
               >
                 <span
-                  v-if="isAdmin"
+                  v-if="canEdit"
                   class="drag-handle"
                   draggable="true"
                   title="Ziehen, um den Monitor einem anderen Fahrzeug zuzuweisen"
@@ -350,6 +351,7 @@ async function removeFromVehicle(m: VehicleMonitor) {
                 <span class="led" :class="monitorStatusCls(m.id)"></span>
                 <span class="mon-card-name">{{ m.name }}</span>
                 <button
+                  v-if="canEdit"
                   class="mon-detail"
                   title="Monitor-Details öffnen"
                   aria-label="Monitor-Details öffnen"
@@ -374,7 +376,7 @@ async function removeFromVehicle(m: VehicleMonitor) {
                   🌐
                 </button>
                 <button
-                  v-if="isAdmin"
+                  v-if="canEdit"
                   class="mon-remove"
                   title="Aus Fahrzeug entfernen"
                   aria-label="Aus Fahrzeug entfernen"
