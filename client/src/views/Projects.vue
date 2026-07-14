@@ -185,9 +185,33 @@ async function saveAssign() {
           </span>
         </div>
         <div v-if="isAdmin" class="project-actions">
-          <button class="btn btn-sm" @click="openNewVehicle(p)">+ Fahrzeug</button>
-          <button class="btn btn-sm" @click="openEditProject(p)">Bearbeiten</button>
-          <button class="btn btn-sm btn-danger" @click="removeProject(p)">Löschen</button>
+          <button
+            class="btn btn-sm btn-icon"
+            title="Fahrzeug hinzufügen"
+            aria-label="Fahrzeug hinzufügen"
+            @click="openNewVehicle(p)"
+          >
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+              <line x1="12" y1="5" x2="12" y2="19" />
+              <line x1="5" y1="12" x2="19" y2="12" />
+            </svg>
+          </button>
+          <button
+            class="btn btn-sm btn-icon"
+            title="Projekt bearbeiten"
+            aria-label="Projekt bearbeiten"
+            @click="openEditProject(p)"
+          >
+            ✏️
+          </button>
+          <button
+            class="btn btn-sm btn-icon btn-icon-danger"
+            title="Projekt löschen"
+            aria-label="Projekt löschen"
+            @click="removeProject(p)"
+          >
+            ✕
+          </button>
         </div>
       </div>
 
@@ -200,11 +224,32 @@ async function saveAssign() {
       <div v-else class="vehicle-list">
         <div v-for="v in p.vehicles" :key="v.id" class="vehicle">
           <div class="vehicle-head">
-            <span class="vehicle-name">🚗 {{ v.name }}</span>
+            <span class="vehicle-name">🚆 {{ v.name }}</span>
             <div v-if="isAdmin" class="vehicle-actions">
-              <button class="btn btn-sm" @click="openAssign(v)">Monitore</button>
-              <button class="btn btn-sm" @click="openEditVehicle(v)">Umbenennen</button>
-              <button class="btn btn-sm btn-danger" @click="removeVehicle(v)">Löschen</button>
+              <button
+                class="btn btn-sm btn-icon"
+                title="Monitore zuweisen"
+                aria-label="Monitore zuweisen"
+                @click="openAssign(v)"
+              >
+                🖥️
+              </button>
+              <button
+                class="btn btn-sm btn-icon"
+                title="Fahrzeug umbenennen"
+                aria-label="Fahrzeug umbenennen"
+                @click="openEditVehicle(v)"
+              >
+                ✏️
+              </button>
+              <button
+                class="btn btn-sm btn-icon btn-icon-danger"
+                title="Fahrzeug löschen"
+                aria-label="Fahrzeug löschen"
+                @click="removeVehicle(v)"
+              >
+                ✕
+              </button>
             </div>
           </div>
 
@@ -360,8 +405,10 @@ async function saveAssign() {
 }
 
 .vehicle-list {
-  display: flex;
-  flex-direction: column;
+  /* Fahrzeug-Karten als Zeilen: horizontal umbrechendes Raster, jede Karte
+     mindestens 300px breit (auto-fill füllt die Zeile mit gleich breiten Karten). */
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
   gap: 8px;
 }
 .vehicle {
