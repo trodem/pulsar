@@ -53,6 +53,16 @@ export const useProjectStore = defineStore("projects", () => {
     await fetchAll();
   }
 
+  // Verschiebt einen einzelnen Monitor auf ein Fahrzeug (Drag & Drop), auch
+  // projektübergreifend. vehicleId=null hebt die Zuweisung auf.
+  async function moveMonitorToVehicle(
+    monitorId: number,
+    vehicleId: number | null,
+  ) {
+    await api.put(`/projects/monitors/${monitorId}/vehicle`, { vehicleId });
+    await fetchAll();
+  }
+
   return {
     items,
     fetchAll,
@@ -63,5 +73,6 @@ export const useProjectStore = defineStore("projects", () => {
     updateVehicle,
     removeVehicle,
     setVehicleMonitors,
+    moveMonitorToVehicle,
   };
 });

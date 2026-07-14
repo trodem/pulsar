@@ -2,15 +2,17 @@
 // Projects-Seite: pro Projekt eine Karte mit seinen Fahrzeugen; an jedes
 // Fahrzeug lassen sich Monitore zuweisen. Hierarchie: Projekt → Fahrzeug → Monitor.
 import { computed, onMounted, reactive, ref } from "vue";
+import { useRouter } from "vue-router";
 import { useProjectStore } from "../stores/projects";
 import { useMonitorStore } from "../stores/monitors";
 import { useAuthStore } from "../stores/auth";
 import { statusLabel } from "../format";
-import type { Project, Vehicle } from "../types";
+import type { Project, Vehicle, VehicleMonitor } from "../types";
 
 const store = useProjectStore();
 const monitorStore = useMonitorStore();
 const auth = useAuthStore();
+const router = useRouter();
 // Nur Admins dürfen anlegen/ändern/löschen (der Server erzwingt dies ebenfalls).
 const isAdmin = computed(() => auth.isAdmin);
 
@@ -158,6 +160,54 @@ async function saveAssign() {
     assignError.value = e.response?.data?.error ?? "Speichern fehlgeschlagen";
   }
 }
+
+// --- Drag & Drop: Monitore zwischen Fahrzeugen verschieben (auch projektübergreifend) ---
+const dragMonitorId = ref<number | null>(null);
+const dragOverVehicleId = ref<number | null>(null);
+// Merkt sich, dass gerade gezogen wurde, um den Klick (Navigation) nach einem
+// Drag zu unterdrücken.
+const justDragged = ref(false);
+
+function onMonitorDragStart(m: VehicleMonitor, e: DragEvent) {
+  if (!isAdmin.value) return;
+  dragMonitorId.value = m.id;
+  e.dataTransfer?.setData("text/plain", String(m.id));
+  if (e.dataTransfer) e.dataTransfer.effectAllowed = "move";
+}
+
+function onMonitorDragEnd() {
+  dragMonitorId.value = null;
+  dragOverVehicleId.value = null;
+  // Klick-Unterdrückung kurz aktiv lassen (der Klick folgt direkt auf dragend).
+  justDragged.value = true;
+  setTimeout(() => (justDragged.value = false), 0);
+}
+
+function onVehicleDragOver(v: Vehicle, e: DragEvent) {
+  if (dragMonitorId.value == null) return;
+  e.preventDefault(); // erlaubt das Drop
+  if (e.dataTransfer) e.dataTransfer.dropEffect = "move";
+  dragOverVehicleId.value = v.id;
+}
+
+function onVehicleDragLeave(v: Vehicle) {
+  if (dragOverVehicleId.value === v.id) dragOverVehicleId.value = null;
+}
+
+async function onMonitorDrop(v: Vehicle) {
+  const id = dragMonitorId.value;
+  dragOverVehicleId.value = null;
+  dragMonitorId.value = null;
+  if (id == null) return;
+  // Bereits auf diesem Fahrzeug? Dann nichts tun (spart einen Serveraufruf).
+  if (v.monitors.some((m) => m.id === id)) return;
+  await store.moveMonitorToVehicle(id, v.id);
+}
+
+function goToMonitor(id: number) {
+  if (justDragged.value) return;
+  router.push({ name: "monitor", params: { id } });
+}
 </script>
 
 <template>
@@ -222,7 +272,15 @@ async function saveAssign() {
       </div>
 
       <div v-else class="vehicle-list">
-        <div v-for="v in p.vehicles" :key="v.id" class="vehicle">
+        <div
+          v-for="v in p.vehicles"
+          :key="v.id"
+          class="vehicle"
+          :class="{ 'vehicle-drop': dragOverVehicleId === v.id }"
+          @dragover="onVehicleDragOver(v, $event)"
+          @dragleave="onVehicleDragLeave(v)"
+          @drop.prevent="onMonitorDrop(v)"
+        >
           <div class="vehicle-head">
             <span class="vehicle-name">🚆 {{ v.name }}</span>
             <div v-if="isAdmin" class="vehicle-actions">
@@ -255,17 +313,23 @@ async function saveAssign() {
 
           <div class="vehicle-monitors">
             <template v-if="v.monitors.length">
-              <router-link
+              <div
                 v-for="m in v.monitors"
                 :key="m.id"
-                :to="{ name: 'monitor', params: { id: m.id } }"
-                class="mon-chip"
+                class="mon-card"
+                :class="{ 'mon-dragging': dragMonitorId === m.id }"
+                :draggable="isAdmin"
+                @dragstart="onMonitorDragStart(m, $event)"
+                @dragend="onMonitorDragEnd"
+                @click="goToMonitor(m.id)"
               >
                 <span class="led" :class="monitorStatusCls(m.id)"></span>
-                {{ m.name }}
-              </router-link>
+                <span class="mon-card-name">{{ m.name }}</span>
+              </div>
             </template>
-            <span v-else class="chip-empty">Keine Monitore zugewiesen</span>
+            <span v-else class="chip-empty">
+              Keine Monitore — Monitor hierher ziehen
+            </span>
           </div>
         </div>
       </div>
@@ -419,6 +483,12 @@ async function saveAssign() {
   display: flex;
   flex-direction: column;
   gap: 8px;
+  transition: border-color 0.15s, background 0.15s;
+}
+/* Aktives Drop-Ziel beim Ziehen eines Monitors auf dieses Fahrzeug. */
+.vehicle-drop {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 10%, var(--bg-elev-2));
 }
 .vehicle-head {
   display: flex;
@@ -432,31 +502,47 @@ async function saveAssign() {
   font-size: 14px;
 }
 .vehicle-monitors {
-  display: flex;
-  flex-wrap: wrap;
+  /* Monitor-Karten: höchstens 2 pro Zeile. */
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 6px;
 }
-.mon-chip {
-  display: inline-flex;
+.mon-card {
+  display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 7px;
+  min-width: 0;
   font-size: 12px;
   color: var(--text);
-  text-decoration: none;
   background: var(--bg-elev);
   border: 1px solid var(--border);
-  padding: 3px 9px;
+  padding: 7px 9px;
   border-radius: 6px;
-  transition: border-color 0.15s;
+  cursor: grab;
+  transition: border-color 0.15s, box-shadow 0.15s;
 }
-.mon-chip:hover {
+.mon-card:hover {
   border-color: var(--accent);
 }
-.mon-chip .led {
+.mon-card:active {
+  cursor: grabbing;
+}
+/* Die gerade gezogene Karte abschwächen. */
+.mon-dragging {
+  opacity: 0.4;
+}
+.mon-card .led {
   width: 9px;
   height: 9px;
 }
+.mon-card-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* Leerer-Zustand-Text spannt über beide Spalten. */
 .chip-empty {
+  grid-column: 1 / -1;
   font-size: 12px;
   color: var(--text-dim);
   font-style: italic;

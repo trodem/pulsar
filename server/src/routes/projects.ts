@@ -20,6 +20,12 @@ const assignSchema = z.object({
   monitorIds: z.array(z.number().int().positive()).default([]),
 });
 
+// Ein einzelner Monitor wird per Drag & Drop einem Fahrzeug zugewiesen
+// (vehicleId = null hebt die Zuweisung auf).
+const moveSchema = z.object({
+  vehicleId: z.number().int().positive().nullable(),
+});
+
 // Alle Projekte inkl. ihrer Fahrzeuge und der daran zugewiesenen Monitore
 // (id + name reichen für die Karten; Status kommt im Client aus dem Monitor-Store).
 router.get(
@@ -218,6 +224,45 @@ router.put(
         .set({ vehicleId })
         .where(inArray(monitors.id, parsed.data.monitorIds))
         .run();
+    }
+    res.status(204).end();
+  }),
+);
+
+// Verschiebt einen einzelnen Monitor auf ein Fahrzeug (oder löst ihn mit
+// vehicleId=null). Für Drag & Drop zwischen Fahrzeugen — auch projektübergreifend,
+// da hier nur der Monitor aktualisiert wird. Drei-Segment-Pfad, keine Kollision.
+router.put(
+  "/monitors/:monitorId/vehicle",
+  asyncHandler(async (req, res) => {
+    const monitorId = Number(req.params.monitorId);
+    const parsed = moveSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: parsed.error.issues });
+      return;
+    }
+    const { vehicleId } = parsed.data;
+    // Zielfahrzeug muss existieren (sofern nicht null).
+    if (vehicleId != null) {
+      const vehicle = await db
+        .select({ id: vehicles.id })
+        .from(vehicles)
+        .where(eq(vehicles.id, vehicleId))
+        .get();
+      if (!vehicle) {
+        res.status(404).json({ error: "Vehicle not found" });
+        return;
+      }
+    }
+    const [updated] = await db
+      .update(monitors)
+      .set({ vehicleId })
+      .where(eq(monitors.id, monitorId))
+      .returning()
+      .all();
+    if (!updated) {
+      res.status(404).json({ error: "Monitor not found" });
+      return;
     }
     res.status(204).end();
   }),
