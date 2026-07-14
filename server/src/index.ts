@@ -11,6 +11,7 @@ import authRoutes from "./routes/auth.js";
 import monitorRoutes from "./routes/monitors.js";
 import notificationRoutes from "./routes/notifications.js";
 import groupRoutes from "./routes/groups.js";
+import projectRoutes from "./routes/projects.js";
 import tagRoutes from "./routes/tags.js";
 import maintenanceRoutes from "./routes/maintenances.js";
 import { initSocket } from "./socket.js";
@@ -27,6 +28,7 @@ app.use("/api/auth", authRoutes);
 app.use("/api/monitors", requireAuth, requireWrite, monitorRoutes);
 app.use("/api/notifications", requireAuth, requireWrite, notificationRoutes);
 app.use("/api/groups", requireAuth, requireWrite, groupRoutes);
+app.use("/api/projects", requireAuth, requireWrite, projectRoutes);
 app.use("/api/tags", requireAuth, requireWrite, tagRoutes);
 app.use("/api/maintenances", requireAuth, requireWrite, maintenanceRoutes);
 

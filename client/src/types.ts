@@ -30,6 +30,30 @@ export interface Tag {
   createdAt: number;
 }
 
+// Ein Monitor, wie er (nur mit id + name) an einem Fahrzeug hängt.
+export interface VehicleMonitor {
+  id: number;
+  name: string;
+}
+
+// Ein Fahrzeug gehört zu einem Projekt und trägt zugewiesene Monitore.
+export interface Vehicle {
+  id: number;
+  projectId: number;
+  name: string;
+  createdAt: number;
+  monitors: VehicleMonitor[];
+}
+
+// Ein Projekt bündelt Fahrzeuge; wird auf der Projects-Seite als Karte gezeigt.
+export interface Project {
+  id: number;
+  name: string;
+  description: string;
+  createdAt: number;
+  vehicles: Vehicle[];
+}
+
 export interface Monitor {
   id: number;
   name: string;
@@ -37,6 +61,7 @@ export interface Monitor {
   target: string;
   port: number | null;
   groupId: number | null;
+  vehicleId?: number | null;
   interval: number;
   timeout: number;
   retries: number;

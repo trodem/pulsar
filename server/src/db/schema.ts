@@ -26,6 +26,31 @@ export const groups = sqliteTable("groups", {
     .default(sql`(unixepoch())`),
 });
 
+// Ein Projekt bündelt Fahrzeuge (vehicles). Rein organisatorisch, unabhängig von
+// den Gruppen: die Projects-Seite zeigt pro Projekt eine Karte mit seinen
+// Fahrzeugen und den daran zugewiesenen Monitoren.
+export const projects = sqliteTable("projects", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  name: text("name").notNull(),
+  description: text("description").notNull().default(""),
+  createdAt: integer("created_at")
+    .notNull()
+    .default(sql`(unixepoch())`),
+});
+
+// Ein Fahrzeug gehört zu genau einem Projekt. An ein Fahrzeug lassen sich
+// beliebig viele Monitore zuweisen (monitors.vehicle_id).
+export const vehicles = sqliteTable("vehicles", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  projectId: integer("project_id")
+    .notNull()
+    .references(() => projects.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  createdAt: integer("created_at")
+    .notNull()
+    .default(sql`(unixepoch())`),
+});
+
 export const monitors = sqliteTable("monitors", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   name: text("name").notNull(),
@@ -33,6 +58,10 @@ export const monitors = sqliteTable("monitors", {
   type: text("type").notNull().default("http"),
   // Optional group this monitor belongs to (null = Ungrouped).
   groupId: integer("group_id").references(() => groups.id, {
+    onDelete: "set null",
+  }),
+  // Optionales Fahrzeug, dem dieser Monitor zugewiesen ist (null = keinem).
+  vehicleId: integer("vehicle_id").references(() => vehicles.id, {
     onDelete: "set null",
   }),
   // For http / http-ping: full URL. For tcp/ping: hostname or IP.
@@ -191,5 +220,7 @@ export type Heartbeat = typeof heartbeats.$inferSelect;
 export type Notification = typeof notifications.$inferSelect;
 export type User = typeof users.$inferSelect;
 export type Group = typeof groups.$inferSelect;
+export type Project = typeof projects.$inferSelect;
+export type Vehicle = typeof vehicles.$inferSelect;
 export type Tag = typeof tags.$inferSelect;
 export type Maintenance = typeof maintenances.$inferSelect;

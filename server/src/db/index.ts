@@ -45,11 +45,26 @@ export async function initSchema(): Promise<void> {
       created_at INTEGER NOT NULL DEFAULT (unixepoch())
     );
 
+    CREATE TABLE IF NOT EXISTS projects (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      description TEXT NOT NULL DEFAULT '',
+      created_at INTEGER NOT NULL DEFAULT (unixepoch())
+    );
+
+    CREATE TABLE IF NOT EXISTS vehicles (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+      name TEXT NOT NULL,
+      created_at INTEGER NOT NULL DEFAULT (unixepoch())
+    );
+
     CREATE TABLE IF NOT EXISTS monitors (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       name TEXT NOT NULL,
       type TEXT NOT NULL DEFAULT 'http',
       group_id INTEGER REFERENCES groups(id) ON DELETE SET NULL,
+      vehicle_id INTEGER REFERENCES vehicles(id) ON DELETE SET NULL,
       target TEXT NOT NULL,
       port INTEGER,
       interval INTEGER NOT NULL DEFAULT 60,
@@ -155,6 +170,15 @@ export async function initSchema(): Promise<void> {
   if (!(await columnExists("monitors", "position"))) {
     await client.execute(
       "ALTER TABLE monitors ADD COLUMN position INTEGER NOT NULL DEFAULT 0;",
+    );
+  }
+
+  // Migrate databases from before the Projects/Vehicles feature: add the
+  // vehicle_id column (null = keinem Fahrzeug zugewiesen). Die Tabellen projects
+  // und vehicles werden oben per CREATE TABLE IF NOT EXISTS angelegt.
+  if (!(await columnExists("monitors", "vehicle_id"))) {
+    await client.execute(
+      "ALTER TABLE monitors ADD COLUMN vehicle_id INTEGER REFERENCES vehicles(id) ON DELETE SET NULL;",
     );
   }
 
