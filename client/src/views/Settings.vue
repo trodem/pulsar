@@ -133,7 +133,7 @@ async function removeTag(t: Tag) {
 
 <template>
   <div class="page-head">
-    <h1>Groups &amp; Tags</h1>
+    <h1>Settings</h1>
   </div>
 
   <div class="settings-grid">
