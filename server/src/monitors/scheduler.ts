@@ -50,6 +50,13 @@ async function executeCheck(monitor: Monitor): Promise<void> {
       result = await runCheck(monitor);
     }
 
+    // Der Check kann sich mit dem Beginn eines Wartungsfensters überschnitten
+    // haben (die Retries liefen noch, als die Wartung startete). Ist der Monitor
+    // jetzt in Wartung, verwerfen wir das Ergebnis, damit dieser Heartbeat den
+    // Wartungs-Heartbeat (status 3) nicht überschreibt und den Monitor scheinbar
+    // aus der Wartung nimmt.
+    if (underMaintenance.has(monitor.id)) return;
+
     const prev = task.lastStatus;
     // 1 = up (green), 2 = degraded (orange), 0 = down (red).
     const status = result.up ? 1 : result.degraded ? 2 : 0;
@@ -143,16 +150,19 @@ async function maintenanceTick(): Promise<void> {
   const next = await monitorIdsUnderMaintenance();
   const prev = underMaintenance;
 
-  const entered: number[] = [];
   const exited: number[] = [];
-  for (const id of next) if (!prev.has(id)) entered.push(id);
   for (const id of prev) if (!next.has(id)) exited.push(id);
 
   // Publish the new set before resuming exited monitors so their executeCheck
   // (which reads underMaintenance) is no longer suspended.
   underMaintenance = next;
 
-  for (const id of entered) {
+  // Jeden Monitor unter Wartung auf den Wartungs-Heartbeat bringen. Wir iterieren
+  // die gesamte aktive Menge (nicht nur neu hinzugekommene ids): so heilt sich
+  // auch ein Monitor, dessen laufender Check knapp nach Fensterbeginn noch einen
+  // Nicht-3-Heartbeat geschrieben hat. writeMaintenanceBeat setzt lastStatus=3,
+  // der nächste Tick ist für bereits markierte Monitore also ein No-op.
+  for (const id of next) {
     const task = tasks.get(id);
     if (task && task.lastStatus !== 3) await writeMaintenanceBeat(id, task);
   }
