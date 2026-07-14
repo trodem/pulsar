@@ -197,12 +197,14 @@ select {
   white-space: nowrap;
 }
 
-.brand .dot {
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-  background: var(--accent);
-  box-shadow: 0 0 10px var(--accent);
+/* Logo-Grafik links im Header (ersetzt den früheren farbigen Punkt). Das PNG
+   ist freigestellt (transparenter Hintergrund) und auf das Icon zugeschnitten,
+   sodass es den Platz voll ausfüllt. */
+.brand-logo {
+  width: 34px;
+  height: 34px;
+  object-fit: contain;
+  display: block;
 }
 
 .nav-link {
@@ -593,11 +595,15 @@ select {
 }
 .monitor-row .row-actions {
   flex-shrink: 0;
-  /* Fallback: when there's no users column and no tags, this keeps the buttons
-     pinned right. When row-meta is present its own auto margin wins first. */
-  margin-left: auto;
   display: flex;
   gap: 4px;
+}
+/* Nur EIN auto-Margin darf den freien Platz absorbieren, sonst teilen sich zwei
+   auto-Margins den Platz und der Tag-Block (row-meta) landet in der Mitte statt
+   rechts. Ist row-meta da, hat sie das auto-Margin (steht mit den Buttons rechts);
+   fehlt row-meta, bekommen die Buttons selbst das auto-Margin. */
+.monitor-row:not(:has(.row-meta)) .row-actions {
+  margin-left: auto;
 }
 
 .monitor-card {
@@ -661,6 +667,15 @@ select {
   flex-wrap: nowrap;
   flex-shrink: 0;
   justify-content: flex-end;
+}
+
+/* Tags immer ans rechte Ende der Kartenkopf-Zeile schieben. */
+.header-tags {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 10px;
 }
 
 /* Tag shown in the card header — sized like the monitor type badge. */

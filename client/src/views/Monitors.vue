@@ -548,28 +548,6 @@ async function showLogFiles(m: Monitor) {
         style="display: none"
         @change="onCsvSelected"
       />
-      <div class="view-toggle" role="group" aria-label="View mode">
-        <button
-          type="button"
-          class="view-toggle-btn"
-          :class="{ active: ui.monitorView === 'card' }"
-          title="Card view"
-          aria-label="Card view"
-          @click="ui.setMonitorView('card')"
-        >
-          ▦
-        </button>
-        <button
-          type="button"
-          class="view-toggle-btn"
-          :class="{ active: ui.monitorView === 'list' }"
-          title="List view"
-          aria-label="List view"
-          @click="ui.setMonitorView('list')"
-        >
-          ☰
-        </button>
-      </div>
       <button v-if="isAdmin" class="btn btn-primary btn-sm" @click="openNew">+ New monitor</button>
     </div>
   </div>
@@ -696,7 +674,7 @@ async function showLogFiles(m: Monitor) {
           {{ m.target }}<span v-if="m.port">:{{ m.port }}</span>
         </span>
         <div
-          v-if="m.type === 'http-ping'"
+          v-if="!HIDE_USERS && m.type === 'http-ping'"
           class="row-users"
           :title="m.usersError ?? undefined"
         >
@@ -824,14 +802,16 @@ async function showLogFiles(m: Monitor) {
             <span v-else-if="m.stats?.status === 3" class="maintenance-badge">
               maintenance
             </span>
-            <span
-              v-for="t in m.tags ?? []"
-              :key="t.id"
-              class="tag-badge"
-              :style="{ background: t.color, borderColor: t.color }"
-            >
-              {{ t.name }}
-            </span>
+            <div v-if="m.tags?.length" class="header-tags">
+              <span
+                v-for="t in m.tags"
+                :key="t.id"
+                class="tag-badge"
+                :style="{ background: t.color, borderColor: t.color }"
+              >
+                {{ t.name }}
+              </span>
+            </div>
             <div class="header-target monitor-target">
               {{ m.target }}<span v-if="m.port">:{{ m.port }}</span>
             </div>
@@ -929,18 +909,18 @@ async function showLogFiles(m: Monitor) {
         </div>
         <div class="monitor-card-body">
         <div class="monitor-details">
-        <div v-if="m.users?.length" class="monitor-users">
+        <div v-if="!HIDE_USERS && m.users?.length" class="monitor-users">
           <span class="label">Online Users:</span>
           <span v-for="u in m.users" :key="u" class="user-chip">{{ u }}</span>
         </div>
         <div
-          v-else-if="m.type === 'http-ping' && !m.usersError"
+          v-else-if="!HIDE_USERS && m.type === 'http-ping' && !m.usersError"
           class="monitor-users"
         >
           <span class="label">Online Users:</span>
           <span class="muted">No users</span>
         </div>
-        <div v-if="m.usersError" class="monitor-users-error" :title="m.usersError">
+        <div v-if="!HIDE_USERS && m.usersError" class="monitor-users-error" :title="m.usersError">
           ⚠ Online Users: {{ m.usersError }}
         </div>
       </div>

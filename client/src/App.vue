@@ -24,7 +24,10 @@ function logout() {
 <template>
   <div v-if="showShell" class="app-shell">
     <header class="app-header">
-      <div class="brand"><span class="dot"></span> Pulsar</div>
+      <div class="brand">
+        <img src="/assets/pulsar_logo.png" alt="Pulsar Logo" class="brand-logo" />
+        Pulsar
+      </div>
       <div class="header-right">
         <span class="muted">
           Signed in as <strong>{{ auth.username }}</strong>

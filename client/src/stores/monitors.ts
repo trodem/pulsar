@@ -82,6 +82,23 @@ export const useMonitorStore = defineStore("monitors", () => {
     return data;
   }
 
+  // Runs a one-off ICMP ping against the monitor's host and returns the result
+  // (reachable + round-trip time). Read-only, so available to every account.
+  async function pingTest(id: number): Promise<{
+    host: string;
+    alive: boolean;
+    time: number | null;
+    message: string;
+  }> {
+    const { data } = await api.get<{
+      host: string;
+      alive: boolean;
+      time: number | null;
+      message: string;
+    }>(`/monitors/${id}/ping`);
+    return data;
+  }
+
   // Lists the files in the monitor's remote log folder (for the modal).
   async function logFiles(
     id: number,
@@ -201,6 +218,7 @@ export const useMonitorStore = defineStore("monitors", () => {
     remove,
     checkUsers,
     restartProgram,
+    pingTest,
     logFiles,
     exportMonitorsCsv,
     importMonitorsCsv,

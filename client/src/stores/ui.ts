@@ -25,16 +25,11 @@ export const useUiStore = defineStore("ui", () => {
   // (1 up, 2 degraded, 3 maintenance, 0 down). Single-select.
   const activeStatus = ref<number | null>(null);
 
-  // How the Monitors page renders each section: "card" (the detailed grid) or
-  // "list" (a compact row per monitor). Persisted so the choice survives
-  // reloads; the store keeps it consistent across navigation.
-  const MONITOR_VIEW_KEY = "monitors.view";
-  const stored = localStorage.getItem(MONITOR_VIEW_KEY);
-  const monitorView = ref<"card" | "list">(stored === "list" ? "list" : "card");
-  function setMonitorView(view: "card" | "list") {
-    monitorView.value = view;
-    localStorage.setItem(MONITOR_VIEW_KEY, view);
-  }
+  // Die Monitors-Seite wird immer als kompakte Liste dargestellt. Die frühere
+  // Umschaltung zwischen Karten- und Listenansicht (inkl. Persistenz) wurde
+  // entfernt; als ref belassen, damit die Ansichtsprüfungen in Monitors.vue
+  // unverändert funktionieren.
+  const monitorView = ref<"card" | "list">("list");
 
   return {
     monitorSearch,
@@ -43,6 +38,5 @@ export const useUiStore = defineStore("ui", () => {
     clearTagFilter,
     activeStatus,
     monitorView,
-    setMonitorView,
   };
 });

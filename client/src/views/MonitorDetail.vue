@@ -92,6 +92,32 @@ async function restartProgram() {
   }
 }
 
+// "Test ping" button state: whether an ICMP ping is in flight, and the last
+// outcome shown next to the button. Read-only, so available to every account.
+const pinging = ref(false);
+const pingMsg = ref<{ ok: boolean; text: string } | null>(null);
+
+async function pingTest() {
+  pinging.value = true;
+  pingMsg.value = null;
+  try {
+    const { host, alive, time } = await store.pingTest(id);
+    pingMsg.value = alive
+      ? {
+          ok: true,
+          text: `${host}: reachable${time != null ? ` (${time} ms)` : ""}`,
+        }
+      : { ok: false, text: `${host}: unreachable` };
+  } catch (e: any) {
+    pingMsg.value = {
+      ok: false,
+      text: e?.response?.data?.error ?? "Ping failed.",
+    };
+  } finally {
+    pinging.value = false;
+  }
+}
+
 // "Online users" button state: whether a remote-log read is in flight. The
 // result lives on the local `monitor` ref (this view holds its own copy fetched
 // via store.get, not the store's list), so we update it directly.
@@ -237,6 +263,14 @@ const events = computed(() =>
       </div>
       <div class="detail-actions">
         <span
+          v-if="pingMsg"
+          class="muted"
+          :style="{ color: pingMsg.ok ? 'var(--up)' : 'var(--down)' }"
+          :title="pingMsg.text"
+        >
+          {{ pingMsg.ok ? "✓" : "⚠" }} {{ pingMsg.text }}
+        </span>
+        <span
           v-if="restartMsg"
           class="muted"
           :style="{ color: restartMsg.ok ? 'var(--up)' : 'var(--down)' }"
@@ -269,6 +303,14 @@ const events = computed(() =>
             @click="openRemoteDesktop(monitor)"
           >
             🖥️ Remote Desktop
+          </button>
+          <button
+            class="btn btn-sm"
+            title="Send an ICMP ping to this host now"
+            :disabled="pinging"
+            @click="pingTest"
+          >
+            {{ pinging ? "⏳ Pinging…" : "📡 Test ping" }}
           </button>
           <button
             v-if="!HIDE_USERS && isAdmin && monitor.type === 'http-ping'"
@@ -319,7 +361,7 @@ const events = computed(() =>
     </div>
 
     <div
-      v-if="monitor.type === 'http-ping' && (monitor.users || monitor.usersError)"
+      v-if="!HIDE_USERS && monitor.type === 'http-ping' && (monitor.users || monitor.usersError)"
       class="stat-card"
       style="margin-bottom: 16px"
     >

@@ -99,7 +99,10 @@ interface PingResult {
 }
 
 /** Runs an ICMP ping against a host and normalizes the result. */
-async function probePing(host: string, timeout: number): Promise<PingResult> {
+export async function probePing(
+  host: string,
+  timeout: number,
+): Promise<PingResult> {
   try {
     const res = await ping.promise.probe(host, { timeout, min_reply: 1 });
     if (res.alive) {

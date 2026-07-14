@@ -22,6 +22,7 @@ import {
   recentHeartbeats,
 } from "../monitors/stats.js";
 import { reschedule, unschedule } from "../monitors/scheduler.js";
+import { probePing } from "../monitors/checkers.js";
 import {
   checkMonitorUsers,
   getStapError,
@@ -47,6 +48,16 @@ function stapErrorFor(m: {
   type: string;
 }): string | null | undefined {
   return isStapMonitor(m) ? getStapError(m.id) : undefined;
+}
+
+// Resolves a monitor's bare hostname for an ICMP ping: the URL host for
+// http(-ping) targets, otherwise the plain target with any port/path stripped.
+function hostForMonitor(m: { target: string }): string {
+  try {
+    return new URL(m.target).hostname || m.target;
+  } catch {
+    return m.target.split("/")[0].split(":")[0].trim();
+  }
 }
 
 const monitorSchema = z.object({
@@ -377,6 +388,33 @@ router.get(
       return;
     }
     res.json({ hours, heartbeats: await heartbeatsSince(id, hours) });
+  }),
+);
+
+// One-off ICMP ping against the monitor's host, triggered by the "Test ping"
+// button in the detail view. Read-only, so mounted as GET — this keeps it
+// usable by read-only accounts (requireWrite only gates non-GET requests).
+router.get(
+  "/:id/ping",
+  asyncHandler(async (req, res) => {
+    const id = Number(req.params.id);
+    const monitor = await db
+      .select()
+      .from(monitors)
+      .where(eq(monitors.id, id))
+      .get();
+    if (!monitor) {
+      res.status(404).json({ error: "Monitor not found" });
+      return;
+    }
+    const host = hostForMonitor(monitor);
+    const result = await probePing(host, monitor.timeout);
+    res.json({
+      host,
+      alive: result.alive,
+      time: result.time,
+      message: result.message,
+    });
   }),
 );
 
